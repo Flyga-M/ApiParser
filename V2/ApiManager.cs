@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ApiParser.V2.Settings;
+using System;
 
 namespace ApiParser.V2
 {
@@ -27,6 +28,11 @@ namespace ApiParser.V2
         // TODO: set up correctly
         private void InitializeEndpoint(IGw2WebApiV2Client client, Endpoint.Endpoint endpoint, ApiManagerSettings settings)
         {
+            if (endpoint == null)
+            {
+                throw new ArgumentNullException(nameof(endpoint));
+            }
+            
             _endpoints.Add(new EndpointManager(client, endpoint, settings.Cooldown));
         }
 

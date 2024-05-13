@@ -2,88 +2,61 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 
 namespace ApiParser.V2.Endpoint
 {
-    public struct Endpoint
+    public class Endpoint
     {
-        public string Name;
+        public string Name => ToString(); // TODO: remove
 
-        public EndpointPart[] Parts;
+        public EndpointPart[] Parts { get; internal set; } = Array.Empty<EndpointPart>();
+
+        public ParseSettings Settings { get; }
 
         public bool IsDirectlyAccessible => Parts.Last().IsDirectlyAccessible;
 
         /// <exception cref="ArgumentNullException"></exception>
-        /// <exception cref="EndpointParsingException"></exception>
-        /// <exception cref="ApiParserInternalException"></exception>
-        public Endpoint(string name, ParseSettings settings)
+        /// <exception cref="ArgumentException"></exception>
+        public Endpoint(IEnumerable<EndpointPart> parts, ParseSettings settings)
         {
-            if (string.IsNullOrWhiteSpace(name))
+            if (parts == null)
             {
-                throw new ArgumentNullException("name");
+                throw new ArgumentNullException(nameof(parts));
             }
 
-            Name = name;
-            Parts = Array.Empty<EndpointPart>();
-
-            try
+            if (!parts.Any())
             {
-                ResolveName(settings);
+                throw new ArgumentException($"{nameof(parts)} must at least have one element.", nameof(parts));
             }
-            catch (InvalidOperationException ex)
-            {
-                throw new EndpointParsingException($"Endpoint {name} could not be parsed.", nameof(name), ex);
-            }
-            catch (ApiParserInternalException ex)
-            {
-                throw new ApiParserInternalException($"Endpoint {name} could not be parsed.", ex);
-            }
-            catch (EndpointParsingException ex)
-            {
-                throw new EndpointParsingException($"Endpoint {name} could not be parsed.", nameof(name), ex);
-            }
+            
+            Parts = parts.ToArray();
+            Settings = settings;
         }
 
-        /// <exception cref="InvalidOperationException"></exception>
-        /// <exception cref="ApiParserInternalException"></exception>
-        /// <exception cref="EndpointParsingException"></exception>
-        private void ResolveName(ParseSettings settings)
+        public static Endpoint FromString(string id, ParseSettings settings)
         {
-            List<EndpointPart> endpointParts = new List<EndpointPart>();
-
-            string[] parts = Name.Split(settings.EndpointSeparator);
-
-            foreach (string part in parts)
+            if (string.IsNullOrWhiteSpace(id))
             {
-                EndpointPart endpointPart;
-
-                if (string.IsNullOrWhiteSpace(part))
-                {
-                    throw new InvalidOperationException($"Part {part} can't be null, empty or whitespace.");
-                }
-
-                try
-                {
-                    endpointPart = new EndpointPart(part, settings);
-                }
-                catch (ArgumentNullException ex)
-                {
-                    throw new ApiParserInternalException(ex);
-                }
-                catch (EndpointParsingException ex)
-                {
-                    throw new EndpointParsingException($"The " +
-                    $"part {part} could not be parsed.", ex);
-                }
-                catch (ApiParserInternalException ex)
-                {
-                    throw new ApiParserInternalException($"The part {part} could not be parsed.", ex);
-                }
-
-                endpointParts.Add(endpointPart);
+                throw new ArgumentNullException(id);
             }
 
-            Parts = endpointParts.ToArray();
+            string[] parts = id.Split(settings.EndpointSeparator);
+
+            List <EndpointPart> endpointParts = new List<EndpointPart>();
+
+            foreach(string part in parts)
+            {
+                if (string.IsNullOrWhiteSpace(part))
+                {
+                    throw new EndpointParsingException($"Unable to parse {nameof(id)} {id} to {typeof(Endpoint)}. " +
+                        $"Parts are not valid.");
+                }
+
+                endpointParts.Add(EndpointPart.FromString(part, settings));
+            }
+
+            return new Endpoint(endpointParts, settings);
         }
 
         /// <summary>
@@ -111,6 +84,12 @@ namespace ApiParser.V2.Endpoint
             }
 
             return supportsParts;
+        }
+
+        /// <inheritdoc/>
+        public override string ToString()
+        {
+            return string.Join(Settings.EndpointSeparator.ToString(), Parts.Select(part => part.ToString()));
         }
     }
 }

@@ -1,159 +1,172 @@
 ﻿using ApiParser.V2.Settings;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 
 namespace ApiParser.V2.Endpoint
 {
-    public struct EndpointPart
+    public class EndpointPart
     {
-        public string Id;
+        public string EndpointName { get; private set; }
 
-        public string EndpointName;
+        public ParseSettings Settings { get; }
 
-        public bool IsEnumerable;
-        public bool IsDirectlyAccessible;
+        public bool IsEnumerable { get; private set; } = false;
+        public bool IsDirectlyAccessible { get; private set; } = false;
 
-        public Type[] PossibleIndexTypes;
+        public Type[] PossibleIndexTypes { get; private set; } = Array.Empty<Type>();
+
+        public Endpoint[] SubEndpoints { get; private set; } = Array.Empty<Endpoint>();
+
+        public Endpoint[] SubEndpointsForIndex { get; private set; } = Array.Empty<Endpoint>();
 
         /// <exception cref="ArgumentNullException"></exception>
-        /// <exception cref="EndpointParsingException"></exception>
-        /// <exception cref="ApiParserInternalException"></exception>
-        public EndpointPart(string id, ParseSettings settings)
+        /// <exception cref="EndpointException"></exception>
+        public EndpointPart(string endpointName, ParseSettings settings, bool isDirectlyAccessible = true, IEnumerable<Type> possibleIndexTypes = null, IEnumerable<Endpoint> subEndpoints = null, IEnumerable<Endpoint> subEndpointsForIndex = null)
         {
-            if (string.IsNullOrWhiteSpace(id))
+            if (string.IsNullOrWhiteSpace(endpointName))
             {
-                throw new ArgumentNullException("id");
+                throw new ArgumentNullException(nameof(endpointName));
+            }
+            
+            EndpointName = endpointName;
+            Settings = settings;
+
+            IsEnumerable = possibleIndexTypes != null && possibleIndexTypes.Any();
+            IsDirectlyAccessible = isDirectlyAccessible;
+
+            if (possibleIndexTypes != null)
+            {
+                PossibleIndexTypes = possibleIndexTypes.ToArray();
             }
 
-            Id = id;
-            EndpointName = string.Empty;
-            IsEnumerable = false;
-            IsDirectlyAccessible = false;
-            PossibleIndexTypes = Array.Empty<Type>();
+            if (subEndpoints != null)
+            {
+                SubEndpoints = subEndpoints.ToArray();
+            }
+
+            if (subEndpointsForIndex != null)
+            {
+                SubEndpointsForIndex = subEndpointsForIndex.ToArray();
+            }
 
             try
             {
-                ResolveId(settings);
+                Validate();
             }
             catch (InvalidOperationException ex)
             {
-                throw new EndpointParsingException($"EndpointPart id {id} could not be parsed.", nameof(id), ex);
+                throw new EndpointException($"{typeof(EndpointPart)} could not be validated.", ex);
             }
-            catch (ApiParserInternalException ex)
-            {
-                throw new ApiParserInternalException($"EndpointPart id {id} could not be parsed.", ex);
-            }
-
-            IsEnumerable = PossibleIndexTypes.Length > 0;
         }
 
         /// <exception cref="InvalidOperationException"></exception>
-        /// <exception cref="ApiParserInternalException"></exception>
-        private void ResolveId(ParseSettings settings)
-        {   
-            if (!Id.Contains(settings.IndexOpen) && !Id.Contains(settings.IndexClose))
+        private void Validate()
+        {
+            if (string.IsNullOrWhiteSpace(EndpointName))
             {
-                EndpointName = Id;
-                IsDirectlyAccessible = true;
-                return;
+                throw new InvalidOperationException($"{nameof(EndpointName)} can't be null, whitespace or empty.");
             }
 
-            if (!Id.EndsWith(settings.IndexClose))
+            if (!IsDirectlyAccessible && !IsEnumerable)
             {
-                throw new InvalidOperationException($"EndpointPart id {Id} could not be resolved. The part contains " +
-                    $"{settings.IndexOpen} but not {settings.IndexClose}.");
+                throw new InvalidOperationException($"{typeof(EndpointPart)} must be either directly accessible or enumerable.");
             }
 
-            string[] parts = Id.Split(settings.IndexOpen);
-
-            if (parts.Length != 2)
+            if (PossibleIndexTypes.Any(type => !Settings.IndexTypes.Contains(type)))
             {
-                throw new InvalidOperationException($"EndpointPart id {Id} could not be resolved. The part may only " +
-                    $"contain one index.");
+                throw new InvalidOperationException($"{nameof(Settings)} must include an {typeof(IIndexConverter)} for " +
+                    $"every type in {nameof(PossibleIndexTypes)}.");
+            }
+        }
+
+        /// <exception cref="ArgumentNullException"></exception>
+        /// <exception cref="EndpointParsingException"></exception>
+        public static EndpointPart FromString(string id, ParseSettings settings)
+        {
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                throw new ArgumentNullException(nameof(id));
             }
 
-            string name = parts[0];
-            string indices = parts[1];
+            string endpointName = GetEndpointName(id, settings, out string indices);
 
-            if (!indices.EndsWith(settings.IndexClose))
+            if (indices == null)
             {
-                throw new InvalidOperationException($"EndpointPart id {Id} could not be resolved. An index that is opened " +
-                    $"with {settings.IndexOpen} must be closed with {settings.IndexClose}.");
-            }
-
-            indices = indices.Remove(indices.Length - 1);
-
-            if (string.IsNullOrWhiteSpace(name))
-            {
-                throw new InvalidOperationException($"EndpointPart id {Id} could not be resolved. The name can't be null, " +
-                    $"empty or whitespace.");
+                return new EndpointPart(endpointName, settings, true, null, null, null);
             }
 
             if (string.IsNullOrWhiteSpace(indices))
             {
-                throw new InvalidOperationException($"EndpointPart id {Id} could not be resolved. The index can't be null, " +
-                    $"empty or whitespace.");
+                throw new EndpointParsingException($"Unable to parse {nameof(id)} {id} to {typeof(EndpointPart)}. " +
+                    $"Index contents are invalid.");
             }
 
-            EndpointName = name;
+            Type[] possibleIndices = GetTypes(indices, settings, out bool isOptional);
 
-            string[] indicesParts = indices.Split(settings.IndexSeparator);
-            List<Type> types = new List<Type>();
-
-            try
-            {
-                foreach(string index in indicesParts)
-                {
-                    if (string.IsNullOrWhiteSpace(index))
-                    {
-                        throw new InvalidOperationException($"Index part {index} can't be null, empty or whitespace.");
-                    }
-                    
-                    ResolveIndex(index, settings, ref types);
-                }
-            }
-            catch (ArgumentNullException ex)
-            {
-                throw new ApiParserInternalException(ex);
-            }
-            catch (ArgumentException ex)
-            {
-                throw new InvalidOperationException($"EndpointPart id {Id} could not be resolved. An index could not " +
-                    $"be resolved.", ex);
-            }
-
-            PossibleIndexTypes = types.ToArray();
+            return new EndpointPart(endpointName, settings, isOptional, possibleIndices, null, null);
         }
 
-        /// <exception cref="ArgumentException"></exception>
-        /// <exception cref="ArgumentNullException"></exception>
-        private void ResolveIndex(string identifier, ParseSettings settings, ref List<Type> indices)
+        /// <exception cref="EndpointParsingException"></exception>
+        private static string GetEndpointName(string id, ParseSettings settings, out string indices)
         {
-            if (string.IsNullOrWhiteSpace(identifier))
+            indices = null;
+            string[] parts = id.Split(new char[] { settings.IndexOpen }, 2);
+
+            string name = parts[0];
+
+            if (parts.Length == 1)
             {
-                throw new ArgumentNullException(nameof(identifier));
+                return name;
             }
 
-            if (indices == null)
+            string rest = settings.IndexOpen + parts[1];
+
+            if (!BracketUtil.TryGetInnerContent(rest, settings.IndexOpen, settings.IndexClose, out indices))
             {
-                throw new ArgumentNullException(nameof(indices));
+                throw new EndpointParsingException($"Unable to parse {nameof(id)} {id} to {typeof(EndpointPart)}. " +
+                    $"Index brackets are not well formed.");
             }
 
-            if (identifier == settings.IndexOptionalIdentifier)
+            return name;
+        }
+
+        /// <exception cref="EndpointParsingException"></exception>
+        private static Type[] GetTypes(string indices, ParseSettings settings, out bool isOptional)
+        {
+            List<Type> types = new List<Type>();
+            
+            string[] parts = indices.Split(settings.IndexSeparator);
+
+            isOptional = false;
+
+            foreach (string index in parts)
             {
-                IsDirectlyAccessible = true;
-                return;
+                if (string.IsNullOrWhiteSpace(index))
+                {
+                    throw new EndpointParsingException($"Unable to parse {nameof(indices)} {indices} for {typeof(EndpointPart)}. " +
+                        $"Indices are invalid.");
+                }
+
+                if (index == settings.IndexOptionalIdentifier)
+                {
+                    isOptional = true;
+                    continue;
+                }
+
+                Type type = settings.GetType(index);
+
+                if (type == null)
+                {
+                    throw new EndpointParsingException($"Unable to parse {nameof(index)} {index} for {typeof(EndpointPart)}. " +
+                        $"No such type found in {nameof(settings)}.");
+                }
+
+                types.Add(type);
             }
 
-            Type type = settings.GetType(identifier);
-
-            if (type == null)
-            {
-                throw new ArgumentException($"Index {identifier} could not be resolved.", nameof(identifier));
-            }
-
-            indices.Add(type);
+            return types.ToArray();
         }
 
         public bool SupportsQueryPart(EndpointQueryPart queryPart)
@@ -181,6 +194,36 @@ namespace ApiParser.V2.Endpoint
             }
 
             return true;
+        }
+
+        // TODO: add sub endpoints?
+        /// <inheritdoc/>
+        public override string ToString()
+        {
+            string result = EndpointName;
+            
+            if (IsEnumerable)
+            {
+                result += Settings.IndexOpen;
+
+                List<string> indexIdentifiers = new List<string>();
+
+                if (IsDirectlyAccessible)
+                {
+                    indexIdentifiers.Add(Settings.IndexOptionalIdentifier);
+                }
+
+                foreach (Type type in PossibleIndexTypes)
+                {
+                    indexIdentifiers.Add(Settings.GetIdentifier(type));
+                }
+
+                result += string.Join(Settings.IndexSeparator.ToString(), indexIdentifiers);
+
+                result += Settings.IndexClose;
+            }
+
+            return base.ToString();
         }
     }
 }

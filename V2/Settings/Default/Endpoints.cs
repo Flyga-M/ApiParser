@@ -116,7 +116,7 @@ namespace ApiParser.V2.Settings.Default
                 $"Pvp{settings.Value.EndpointSeparator}Stats" // blob PvpStats
             };
 
-            return names.Select(name => new Endpoint.Endpoint(name, settings.Value)).ToArray();
+            return names.Select(name => Endpoint.Endpoint.FromString(name, settings.Value)).ToArray();
         }
     }
 }

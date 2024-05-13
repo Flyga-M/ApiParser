@@ -92,6 +92,8 @@
     <Compile Include="V2\Endpoint\EndpointQueryPart.cs" />
     <Compile Include="V2\Endpoint\EndpointQueryIndex.cs" />
     <Compile Include="V2\Endpoint\GuildEndpointManager.cs" />
+    <Compile Include="V2\Endpoint\_Builder\EndpointBuilder.cs" />
+    <Compile Include="V2\Endpoint\_Builder\EndpointPartBuilder.cs" />
     <Compile Include="V2\Endpoint\_Extensions\TypeExtensions.cs" />
     <Compile Include="V2\Settings\Default\QueryVariableResolver.cs" />
     <Compile Include="V2\Settings\_Interface\IQueryVariableResolver.cs" />
@@ -118,6 +120,7 @@
     <Compile Include="_Exceptions\SettingsException.cs" />
     <Compile Include="_Extensions\IEnumerableExtensions.cs" />
     <Compile Include="_Extensions\StringExtensions.cs" />
+    <Compile Include="_Util\BracketUtil.cs" />
     <Compile Include="_Util\ReflectionUtil.cs" />
     <Compile Include="_Util\RequestExceptionUtil.cs" />
   </ItemGroup>

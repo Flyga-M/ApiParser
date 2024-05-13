@@ -70,6 +70,11 @@ namespace ApiParser.V2
 
         public EndpointManager(IGw2WebApiV2Client apiClient, Endpoint.Endpoint endpoint, double cooldown)
         {
+            if (endpoint == null)
+            {
+                throw new ArgumentNullException(nameof(endpoint));
+            }
+
             if (apiClient == null)
             {
                 throw new ArgumentNullException(nameof(apiClient));
@@ -151,6 +156,11 @@ namespace ApiParser.V2
             try
             {
                 subQuery = query.GetSubQuery(Endpoint);
+            }
+            catch (ArgumentNullException ex)
+            {
+                throw new ApiParserInternalException($"An internal exception occured while attempting to create " +
+                    $"sub query for query {query.Query} for the endpoint {Endpoint.Name}.", ex);
             }
             catch (QueryNotSupportedException ex)
             {

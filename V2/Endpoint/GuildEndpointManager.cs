@@ -14,6 +14,11 @@ namespace ApiParser.V2.Endpoint
         /// <exception cref="EndpointException"></exception>
         public GuildEndpointManager(IGw2WebApiV2Client apiClient, Endpoint endpoint, double cooldown, IGuildClient guildClient, object index) : base(apiClient, endpoint, cooldown)
         {
+            if (endpoint == null)
+            {
+                throw new ArgumentNullException(nameof(endpoint));
+            }
+
             Index = index;
             _guildClient = guildClient;
 

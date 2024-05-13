@@ -114,8 +114,16 @@ namespace ApiParser.V2.Endpoint
 
         /// <exception cref="QueryNotSupportedException"></exception>
         /// <exception cref="ApiParserInternalException"></exception>
+        /// <exception cref="ArgumentNullException"></exception>
         internal EndpointQuery GetSubQuery(Endpoint endpoint)
-        {   
+        {
+
+            if (endpoint == null)
+            {
+                throw new ArgumentNullException(nameof(endpoint));
+            }
+
+
             if (!endpoint.SupportsQuery(this))
             {
                 throw new QueryNotSupportedException($"The given endpoint {endpoint.Name} does not support this query " +
