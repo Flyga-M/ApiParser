@@ -150,8 +150,10 @@ namespace ApiParser.V2.Endpoint
             return valueString.Substring(settings.IndexVariableIdentifier.Length);
         }
 
-        /// <exception cref="QueryParsingException"></exception>
-        /// <exception cref="SettingsException"></exception>
+        /// <exception cref="QueryParsingException">When the given <paramref name="valueString"/> can't be parsed 
+        /// correctly.</exception>
+        /// <exception cref="SettingsException">When the converted value is not of the type that the 
+        /// <paramref name="settings"/> IndexConverter promised.</exception>
         private static object GetValue(string valueString, Type valueType, ParseSettings settings)
         {
             IIndexConverter converter = settings.IndexConverters.FirstOrDefault(conv => conv.Type == valueType);

@@ -12,8 +12,8 @@ namespace ApiParser.V2.Endpoint
         /// </summary>
         /// <param name="type"></param>
         /// <param name="arguments"></param>
-        /// <exception cref="ArgumentNullException"></exception>
-        /// <exception cref="ArgumentException"></exception>
+        /// <exception cref="ArgumentNullException">If <paramref name="arguments"/> is <see langword="null"/>.</exception>
+        /// <exception cref="ArgumentException">If <paramref name="arguments"/> has zero elements.</exception>
         /// <returns>The indexer that takes the given <see cref="Type"/> of <paramref name="arguments"/>, or  
         /// <see langword="null"/> if none is found.</returns>
         public static PropertyInfo GetIndexer(this Type type, params Type[] arguments)

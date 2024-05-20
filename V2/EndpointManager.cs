@@ -6,7 +6,9 @@ using Gw2Sharp.WebApi.V2.Clients;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Reflection;
+using System.Runtime;
 using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,28 +19,18 @@ namespace ApiParser.V2
     public class EndpointManager
     {
         private IGw2WebApiV2Client _apiClient;
-        protected IEndpointClient _client;
+        private IEndpointClient _client;
+        private EndpointQuery _path;
 
-        // I know this is messy, but at this point I'm done with the alternative solutions.
-        protected IGuildClient _guildClient;
-
-        private readonly Type[] _clientGenericArguments;
-
-        protected object _directlyAccessibleData;
-        private Dictionary<object, GuildEndpointManager> _indirectlyAccessibleData = new Dictionary<object, GuildEndpointManager>();
-        
-        /// <summary>
-        /// The <see cref="Endpoint"/> that the <see cref="EndpointManager"/> manages.
-        /// </summary>
-        public Endpoint.Endpoint Endpoint { get; }
+        protected object _endpointData;
         
         /// <summary>
         /// How much milliseconds must pass, until the data of the <see cref="EndpointManager"/> can be refreshed.
         /// </summary>
-        public double Cooldown { get; } 
+        public double Cooldown { get; }
 
         /// <summary>
-        /// The milliseconds since the <see cref="Endpoint"/> was last accessed.
+        /// The milliseconds since the <see cref="EndpointManager"/> was last accessed.
         /// </summary>
         public double MillisecondsSinceLastAccess
         {
@@ -51,305 +43,127 @@ namespace ApiParser.V2
 
         /// <summary>
         /// Determines whether more time has elapsed since the <see cref="LastAccess"/>, than the 
-        /// <see cref="Cooldown"/>. Does not reflect if a specific indirect endpoint can be refreshed as well.
+        /// <see cref="Cooldown"/>.
         /// </summary>
         public bool CanRefresh
         {
             get
             {
-                return _directlyAccessibleData == null || MillisecondsSinceLastAccess > Cooldown;
+                return _endpointData == null || MillisecondsSinceLastAccess > Cooldown;
             }
         }
 
         /// <summary>
-        /// The time, the <see cref="Endpoint"/> was last accessed.
+        /// The time, the <see cref="EndpointManager"/> was last accessed.
         /// </summary>
         public DateTime LastAccess { get; private set; } = DateTime.MinValue;
 
-        public bool IsGuildClient => _guildClient != null;
-
-        public EndpointManager(IGw2WebApiV2Client apiClient, Endpoint.Endpoint endpoint, double cooldown)
+        /// <exception cref="ArgumentNullException"></exception>
+        /// <exception cref="ArgumentOutOfRangeException"></exception>
+        public EndpointManager(IGw2WebApiV2Client apiClient, IEndpointClient endpointClient, EndpointQuery path, double cooldown)
         {
-            if (endpoint == null)
-            {
-                throw new ArgumentNullException(nameof(endpoint));
-            }
-
             if (apiClient == null)
             {
                 throw new ArgumentNullException(nameof(apiClient));
             }
 
+            if (endpointClient == null)
+            {
+                throw new ArgumentNullException(nameof(endpointClient));
+            }
+
+            if (path == null)
+            {
+                throw new ArgumentNullException(nameof(path));
+            }
+
             if (cooldown < 0)
             {
-                throw new ArgumentException("Cooldown can't be negative.", nameof(cooldown));
+                throw new ArgumentOutOfRangeException("Cooldown can't be negative.", nameof(cooldown));
+            }
+
+            if (!endpointClient.IsAllExpandable && !endpointClient.HasBlobData)
+            {
+                throw new EndpointException($"Endpoint is neither all expandable nor has blob data. Those endpoints " +
+                    $"are currently not supported.");
             }
 
             _apiClient = apiClient;
-            Endpoint = endpoint;
+            _client = endpointClient;
+            _path = path;
             Cooldown = cooldown;
-
-            if (!TryResolveClient(apiClient))
-            {
-                throw new ArgumentException($"Endpoint could not be resolved as a {typeof(IEndpointClient)}.", nameof(endpoint));
-            }
-
-            _clientGenericArguments = ReflectionUtil.GetGenericArguments(apiClient);
-        }
-
-        // TODO: maybe return proper exception
-        private bool TryResolveClient(IGw2WebApiV2Client apiClient)
-        {
-            if (apiClient == null)
-            {
-                return false;
-            }
-
-            object resolved = apiClient;
-
-            try
-            {
-                foreach (EndpointPart part in Endpoint.Parts)
-                {
-                    string property = part.EndpointName;
-
-                    resolved = resolved.GetType().GetProperty(property).GetValue(resolved);
-                }
-            }
-            catch
-            {
-                return false;
-            }
-
-            _client = resolved as IEndpointClient;
-            _guildClient = resolved as IGuildClient;
-
-            return _client != null || _guildClient != null;
         }
 
         /// <exception cref="QueryNotSupportedException"></exception>
+        /// <exception cref="EndpointRequestException"></exception>
+        /// <exception cref="QueryResolveException"></exception>
+        /// <exception cref="QueryParsingException"></exception>
         /// <exception cref="ApiParserInternalException"></exception>
         /// <exception cref="SettingsException"></exception>
-        /// <exception cref="QueryResolveException"></exception>
-        /// <exception cref="EndpointException"></exception>
-        public async Task<object> ResolveQuery(EndpointQuery query, QuerySettings settings)
+        public async Task<object> ResolveQuery(ProcessedQueryData queryData, QuerySettings settings)
         {
-            if (!Endpoint.SupportsQuery(query))
+            if (queryData.Path.ToString() != _path.ToString())
             {
-                throw new QueryNotSupportedException($"Unable to resolve query {query.Query}. Query is not supported by the endpoint " +
-                    $"{Endpoint.Name}.", nameof(query));
+                throw new QueryNotSupportedException($"{nameof(queryData)}.{nameof(queryData.Path)} ({queryData.Path}) is not " +
+                    $"the same as the path of this {this.GetType()} ({_path}).");
             }
 
-            if (query.ContainsVariable && settings.VariableResolver == null)
+            if (queryData.ContainsVariable && settings.VariableResolver == null)
             {
-                throw new QueryNotSupportedException($"Unable to resolve query {query.Query}. Query is not supported by the endpoint " +
-                    $"{Endpoint.Name}.", nameof(query), new SettingsException($"Given settings do not support variables."));
-            }
-
-            if (query.QueryParts == null || query.QueryParts.Length == 0)
-            {
-                throw new QueryNotSupportedException($"Query {query.Query} must contain at least one query part.", nameof(query));
-            }
-
-            EndpointQuery subQuery;
-
-            try
-            {
-                subQuery = query.GetSubQuery(Endpoint);
-            }
-            catch (ArgumentNullException ex)
-            {
-                throw new ApiParserInternalException($"An internal exception occured while attempting to create " +
-                    $"sub query for query {query.Query} for the endpoint {Endpoint.Name}.", ex);
-            }
-            catch (QueryNotSupportedException ex)
-            {
-                throw new ApiParserInternalException($"An internal exception occured while attempting to create " +
-                    $"sub query for query {query.Query} for the endpoint {Endpoint.Name}.", ex);
-            }
-            catch (ApiParserInternalException ex)
-            {
-                throw new ApiParserInternalException($"An internal exception occured while attempting to create " +
-                    $"sub query for query {query.Query} for the endpoint {Endpoint.Name}.", ex);
-            }
-
-            object index = null;
-
-            if (IsGuildClient)
-            {
-                EndpointQueryIndex? queryIndex = subQuery.QueryParts?.FirstOrDefault().Indices?.FirstOrDefault();
-
-                if (!queryIndex.HasValue)
-                {
-                    throw new QueryNotSupportedException($"Query {query.Query} does not contain an index for the " +
-                        $"guild endpoint {Endpoint.Name}.");
-                }
-
-                if (queryIndex.Value.IsVariable)
-                {
-                    try
-                    {
-                        index = await queryIndex.Value.ResolveVariable(settings.VariableResolver);
-                    }
-                    catch (ArgumentNullException ex)
-                    {
-                        throw new ApiParserInternalException($"Unable to resolve queryIndex variable {queryIndex.Value.Variable}.", ex);
-                    }
-                    catch (InvalidOperationException ex)
-                    {
-                        throw new ApiParserInternalException($"Unable to resolve queryIndex variable {queryIndex.Value.Variable}.", ex);
-                    }
-                    catch (ArgumentException ex)
-                    {
-                        throw new SettingsException($"Unable to resolve queryIndex variable {queryIndex.Value.Variable} with " +
-                            $"given {nameof(settings.VariableResolver)}.", ex);
-                    }
-                    catch (ApiParserInternalException ex)
-                    {
-                        throw new ApiParserInternalException($"An internal exception occurred while attempting to " +
-                            $"resolve queryIndex variable {queryIndex.Value.Variable}.", ex);
-                    }
-                    catch (SettingsException ex)
-                    {
-                        throw new SettingsException($"Unable to resolve queryIndex variable {queryIndex.Value.Variable} with " +
-                            $"given {nameof(settings.VariableResolver)}. Endpoint settings are faulty.", ex);
-                    }
-                }
-                else
-                {
-                    index = queryIndex.Value.Value;
-                }
+                throw new QueryNotSupportedException($"Unable to resolve query {queryData}. QuerySettings don't contain any " +
+                    $"variable resolver.");
             }
 
             try
             {
-                await UpdateEndpoint(settings, index);
+                await UpdateEndpoint(settings);
             }
-            catch (ArgumentNullException ex)
+            catch (NotImplementedException ex)
             {
                 throw new ApiParserInternalException(ex);
             }
-            catch (InvalidOperationException ex)
+            catch (RequestException ex) // TODO: maybe convert earlier in lower levels.
             {
-                throw new EndpointException($"Endpoint {Endpoint.Name} currently not supported by this library.", ex);
-            }
-            catch (ApiParserInternalException ex)
-            {
-                throw new ApiParserInternalException(ex);
-            }
-            catch (SettingsException ex)
-            {
-                ExceptionDispatchInfo.Capture(ex).Throw();
-            }
-            catch (RequestException ex)
-            {
-                throw new QueryResolveException($"Unable to resolve query {query.Query} for Endpoint {Endpoint.Name}, " +
-                    $"because the API response was an exception.", ex);
+                throw new EndpointRequestException($"Unable to resolve query {queryData}, " +
+                    $"because the API response threw an exception.", ex);
             }
 
+            object endpointData = _endpointData;
 
-            object endpointData = _directlyAccessibleData;
-
-            if (IsGuildClient)
+            if (endpointData == null)
             {
-                endpointData = _indirectlyAccessibleData[index]._directlyAccessibleData;
+                // TODO: maybe put in lower levels, so an inner exception can be provided.
+                throw new EndpointRequestException("Endpoint data is null, after endpoint was updated.");
             }
-            else if (subQuery.QueryParts.First().Enumerate)
+
+            if (queryData.RemainingIndices != null && queryData.RemainingIndices.Any())
             {
-                if (endpointData == null)
-                {
-                    throw new ApiParserInternalException("Endpoint data is null, after endpoint was updated.");
-                }
-
-                if (subQuery.QueryParts.First().Indices == null || subQuery.QueryParts.First().Indices.Length == 0)
-                {
-                    throw new ApiParserInternalException("QueryPart must contain at least one index if enumerate is true.");
-                }
-
-                try
-                {
-                    endpointData = await ResolveIndices(endpointData, subQuery.QueryParts.First().Indices, settings);
-                }
-                catch (ArgumentNullException ex)
-                {
-                    throw new ApiParserInternalException($"An internal exception occured while attempting to " +
-                        $"resolve indices for query at part {subQuery.QueryParts.First().EndpointName} for " +
-                        $"endpoint {Endpoint.Name}.", ex);
-                }
-                catch (ArgumentException ex)
-                {
-                    throw new ApiParserInternalException($"An internal exception occured while attempting to " +
-                        $"resolve indices for sub query at part {subQuery.QueryParts.First().EndpointName} for " +
-                        $"endpoint {Endpoint.Name}.", ex);
-                }
-                catch (ApiParserInternalException ex)
-                {
-                    throw new ApiParserInternalException($"An internal exception occured while attempting to " +
-                        $"resolve indices for sub query at part {subQuery.QueryParts.First().EndpointName} for " +
-                        $"endpoint {Endpoint.Name}.", ex);
-                }
-                catch (InvalidOperationException ex)
-                {
-                    throw new QueryResolveException($"Unable to resolve sub query at part " +
-                        $"{subQuery.QueryParts.First().EndpointName} for endpoint {Endpoint.Name}.", subQuery.Query, ex);
-                }
-                catch (SettingsException ex)
-                {
-                    throw new SettingsException($"Unable to resolve sub query at part " +
-                        $"{subQuery.QueryParts.First().EndpointName} for endpoint {Endpoint.Name}.", ex);
-                }
+                endpointData = await ResolveIndices(endpointData, queryData.RemainingIndices, settings);
             }
 
             if (endpointData == null)
             {
-                throw new ApiParserInternalException("Endpoint data is null, after endpoint was updated.");
+                throw new QueryResolveException($"Unable to resolve query {queryData}. Endpoint data is null, " +
+                    $"after remaining indices were applied.");
             }
 
-            object result;
+            if (queryData.SubQuery == null)
+            {
+                return endpointData;
+            }
+            endpointData = await ResolveSubQuery(endpointData, queryData.SubQuery, settings);
 
-            try
-            {
-                result = await ResolveSubQuery(endpointData, subQuery, settings);
-            }
-            catch (ArgumentNullException ex)
-            {
-                throw new ApiParserInternalException($"An internal exception occured while attempting to " +
-                        $"resolve query {query.Query} for " +
-                        $"endpoint {Endpoint.Name}.", ex);
-            }
-            catch (ApiParserInternalException ex)
-            {
-                throw new ApiParserInternalException($"An internal exception occured while attempting to " +
-                        $"resolve query {query.Query} for " +
-                        $"endpoint {Endpoint.Name}.", ex);
-            }
-            catch (QueryResolveException ex)
-            {
-                throw new QueryResolveException($"Unable to resolve query {query.Query}.", ex);
-            }
-            catch (SettingsException ex)
-            {
-                throw new SettingsException($"Unable to resolve query {query.Query} " +
-                    $"for endpoint {Endpoint.Name}.", ex);
-            }
-
-            return result;
+            return endpointData;
         }
 
-        /// <exception cref="ArgumentNullException"></exception>
-        /// <exception cref="ApiParserInternalException"></exception>
         /// <exception cref="QueryResolveException"></exception>
+        /// <exception cref="QueryParsingException"></exception>
         /// <exception cref="SettingsException"></exception>
         private async Task<object> ResolveSubQuery(object endpointData, EndpointQuery subQuery, QuerySettings settings)
         {
             object result = endpointData;
-            
-            if (result == null)
-            {
-                throw new ArgumentNullException(nameof(endpointData), "EndpointData can't be null.");
-            }
 
-            foreach(EndpointQueryPart queryPart in subQuery.QueryParts.Skip(1))
+            foreach(EndpointQueryPart queryPart in subQuery.QueryParts)
             {
                 string property = queryPart.EndpointName;
 
@@ -359,99 +173,43 @@ namespace ApiParser.V2
                 {
                     propertyInfo = result.GetType().GetProperty(property);
                 }
-                catch (ArgumentNullException ex)
-                {
-                    throw new ApiParserInternalException($"An internal exception occured while attempting to " +
-                        $"resolve sub query {subQuery.Query} at part {queryPart.EndpointName} on endpoint {Endpoint.Name}.", ex);
-                }
                 catch (AmbiguousMatchException ex)
                 {
-                    throw new ApiParserInternalException($"An internal exception occured while attempting to " +
-                        $"resolve sub query {subQuery.Query} at part {queryPart.EndpointName} on endpoint {Endpoint.Name}.", ex);
+                    throw new QueryResolveException($"Unable to resolve sub query {subQuery}, because the query part {queryPart} " +
+                        $"is ambigiuous.", ex);
                 }
 
                 if (propertyInfo == null)
                 {
-                    throw new QueryResolveException($"Unable to resolve sub query at part {queryPart.EndpointName} " +
-                        $"for endpoint {Endpoint.Name}. The given property {property} could not be found.");
+                    throw new QueryResolveException($"Unable to resolve sub query at part {queryPart.EndpointName}. The " +
+                        $"given property {property} could not be found.");
                 }
 
                 result = propertyInfo.GetValue(result);
 
                 if (result == null)
                 {
-                    throw new QueryResolveException($"Unable to resolve sub query at part {queryPart.EndpointName} " +
-                        $"for endpoint {Endpoint.Name}. The given property {property} could be found, but is null.");
+                    throw new QueryResolveException($"Unable to resolve sub query at part {queryPart.EndpointName}. The " +
+                        $"given property {property} could be found, but is null.");
                 }
 
                 if (queryPart.Enumerate)
                 {
-                    if (queryPart.Indices == null || queryPart.Indices.Length == 0)
-                    {
-                        throw new ApiParserInternalException("QueryPart must contain at least one index if enumerate is true.");
-                    }
-
-                    try
-                    {
-                        result = await ResolveIndices(result, queryPart.Indices, settings);
-                    }
-                    catch (ArgumentNullException ex)
-                    {
-                        throw new ApiParserInternalException($"An internal exception occured while attempting to " +
-                            $"resolve indices for sub query at part {queryPart.EndpointName} for " +
-                            $"endpoint {Endpoint.Name}.", ex);
-                    }
-                    catch (ArgumentException ex)
-                    {
-                        throw new ApiParserInternalException($"An internal exception occured while attempting to " +
-                            $"resolve indices for sub query at part {queryPart.EndpointName} for " +
-                            $"endpoint {Endpoint.Name}.", ex);
-                    }
-                    catch (ApiParserInternalException ex)
-                    {
-                        throw new ApiParserInternalException($"An internal exception occured while attempting to " +
-                            $"resolve indices for sub query at part {queryPart.EndpointName} for " +
-                            $"endpoint {Endpoint.Name}.", ex);
-                    }
-                    catch (InvalidOperationException ex)
-                    {
-                        throw new QueryResolveException($"Unable to resolve sub query at part " +
-                            $"{queryPart.EndpointName} for endpoint {Endpoint.Name}.", subQuery.Query, ex);
-                    }
-                    catch (SettingsException ex)
-                    {
-                        throw new SettingsException($"Unable to resolve sub query at part " +
-                            $"{queryPart.EndpointName} for endpoint {Endpoint.Name}.", ex);
-                    }
+                    result = await ResolveIndices(result, queryPart.Indices, settings);
                 }
             }
 
             return result;
         }
 
-        /// <exception cref="ArgumentNullException"></exception>
-        /// <exception cref="ArgumentException"></exception>
-        /// <exception cref="ApiParserInternalException"></exception>
+        // TODO: is very similar to ApiManager.ResolveIndices. Maybe they can be moved to a utility class
+
+        /// <exception cref="QueryResolveException"></exception>
+        /// <exception cref="QueryParsingException"></exception>
         /// <exception cref="SettingsException"></exception>
-        /// <exception cref="InvalidOperationException"></exception>
         private async Task<object> ResolveIndices(object @object, EndpointQueryIndex[] indices, QuerySettings settings)
         {
             object result = @object;
-
-            if (@object == null)
-            {
-                throw new ArgumentNullException(nameof(@object));
-            }
-
-            if (indices == null)
-            {
-                throw new ArgumentNullException(nameof(indices));
-            }
-            
-            if (indices.Length == 0)
-            {
-                throw new ArgumentException("Indices must at least have one entry.", nameof(indices));
-            }
 
             foreach (EndpointQueryIndex index in indices)
             {
@@ -459,33 +217,8 @@ namespace ApiParser.V2
 
                 if (index.IsVariable)
                 {
-                    try
-                    {
-                        indexValue = await index.ResolveVariable(settings.VariableResolver);
-                    }
-                    catch (ArgumentNullException ex)
-                    {
-                        throw new ApiParserInternalException($"Unable to resolve index variable {index.Variable}.", ex);
-                    }
-                    catch (InvalidOperationException ex)
-                    {
-                        throw new ApiParserInternalException($"Unable to resolve index variable {index.Variable}.", ex);
-                    }
-                    catch (ArgumentException ex)
-                    {
-                        throw new SettingsException($"Unable to resolve index variable {index.Variable} with " +
-                            $"given {nameof(settings.VariableResolver)}.", ex);
-                    }
-                    catch (ApiParserInternalException ex)
-                    {
-                        throw new ApiParserInternalException($"An internal exception occurred while attempting to " +
-                            $"resolve index variable {index.Variable}.", ex);
-                    }
-                    catch (SettingsException ex)
-                    {
-                        throw new SettingsException($"Unable to resolve index variable {index.Variable} with " +
-                            $"given {nameof(settings.VariableResolver)}. Endpoint settings are faulty.", ex);
-                    }
+                    // don't catch anything, so it can bubble up
+                    indexValue = await index.ResolveVariable(settings.VariableResolver);
                 }
                 else
                 {
@@ -494,115 +227,45 @@ namespace ApiParser.V2
 
                 PropertyInfo indexer;
 
-                try
-                {
-                    indexer = result.GetType().GetIndexer(new Type[] { index.IndexType });
-                }
-                catch (ArgumentException ex) // exception does not occur, when the indexer can't be found
-                {
-                    throw new ApiParserInternalException(ex);
-                }
+                indexer = result.GetType().GetIndexer(new Type[] { index.IndexType });
 
                 if (indexer == null) // not directly enumerable with the given type
                 {
-                    throw new InvalidOperationException($"Object of type {result.GetType()} has no indexer for " +
+                    throw new QueryResolveException($"Object of type {result.GetType()} has no indexer for " +
                         $"{index.IndexType}.");
                 }
 
-                // TODO: revisit exceptions. result info is not usefull, since result is newly assigned in the try block
+                object value;
+
                 try
                 {
-                    result = indexer.GetValue(result, new object[] { indexValue });
-                }
-                catch (ArgumentException ex)
-                {
-                    throw new ApiParserInternalException($"An internal exception occured while attempting to resolve the " +
-                        $"index {indexValue} on object of type {result.GetType()}.", ex);
-                }
-                catch (TargetException ex)
-                {
-                    throw new ApiParserInternalException($"An internal exception occured while attempting to resolve the " +
-                        $"index {indexValue} on object of type {result.GetType()}.", ex);
-                }
-                catch (TargetParameterCountException ex)
-                {
-                    throw new ApiParserInternalException($"An internal exception occured while attempting to resolve the " +
-                        $"index {indexValue} on object of type {result.GetType()}.", ex);
-                }
-                catch (MethodAccessException ex)
-                {
-                    throw new ApiParserInternalException($"An internal exception occured while attempting to resolve the " +
-                        $"index {indexValue} on object of type {result.GetType()}.", ex);
+                    value = indexer.GetValue(result, new object[] { indexValue });
                 }
                 catch (TargetInvocationException ex)
                 {
-                    throw new InvalidOperationException($"Indexer of object of type {result.GetType()} threw an exception " +
+                    throw new QueryResolveException($"Indexer of object of type {result.GetType()} threw an exception " +
                         $"for index value {indexValue}.", ex);
                 }
-                catch (Exception ex)
+
+                if (value == null)
                 {
-                    throw new ApiParserInternalException($"An unhandled exception occured while attempting to resolve the " +
-                        $"index {indexValue} on object of type {result.GetType()}.", ex);
+                    throw new QueryResolveException($"Unable to resolve indices {string.Join<EndpointQueryIndex>(", ", indices)} " +
+                        $"in query. The given index {index} could be used, but it's value returns null.");
                 }
+
+                result = value;
             }
 
             return result;
         }
 
-        /// <exception cref="ArgumentNullException"></exception>
-        /// <exception cref="InvalidOperationException"></exception>
         /// <exception cref="ApiParserInternalException"></exception>
         /// <exception cref="SettingsException"></exception>
+        /// <exception cref="NotImplementedException"></exception>
         /// <exception cref="RequestException"> All kinds of sub types.</exception>
-        private async Task UpdateEndpoint(QuerySettings settings, object index = null)
+        private async Task UpdateEndpoint(QuerySettings settings)
         {
-            if (IsGuildClient)
-            {
-                if (index == null)
-                {
-                    throw new ArgumentNullException(nameof(index), "Index can't be null, if the endpoint is the guild endpoint.");
-                }
-                
-                try
-                {
-                    await UpdateIndirectEndpoint(settings, index);
-                }
-                catch (ArgumentNullException ex)
-                {
-                    throw new ApiParserInternalException(ex);
-                }
-                catch (ApiParserInternalException ex)
-                {
-                    throw new ApiParserInternalException(ex);
-                }
-                catch (EndpointRequestException ex)
-                {
-                    throw new EndpointRequestException($"Failed to update endpoint {Endpoint.Name}.", ex);
-                }
-                catch (InvalidOperationException ex)
-                {
-                    ExceptionDispatchInfo.Capture(ex).Throw();
-                }
-                catch (SettingsException ex)
-                {
-                    ExceptionDispatchInfo.Capture(ex).Throw();
-                }
-                catch (RequestException ex)
-                {
-                    ExceptionDispatchInfo.Capture(ex).Throw();
-                }
-
-                return;
-            } 
-            
-            // TODO: separate guild endpoint more clearly from this mess
-            if (!Endpoint.IsDirectlyAccessible && Endpoint.Parts.Last().EndpointName != "Guild")
-            {
-                throw new InvalidOperationException("The only not directly accessible endpoint currently supported is " +
-                    $"the Guild endpoint. Given endpoint: {Endpoint.Name}.");
-            }
-
-            if (!CanRefresh) // after indirect endpoint, because indirect endpoints handle this themselves.
+            if (!CanRefresh)
             {
                 return;
             }
@@ -613,129 +276,29 @@ namespace ApiParser.V2
 
             if (_client.IsAllExpandable)
             {
-                try
-                {
-                    retrievedData = await UpdateEndpointAllAsync(_client, settings);
-                }
-                catch (ArgumentNullException ex)
-                {
-                    throw new ApiParserInternalException(ex);
-                }
-                catch (InvalidOperationException ex)
-                {
-                    throw new ApiParserInternalException(ex);
-                }
-                catch (ApiParserInternalException ex)
-                {
-                    throw new ApiParserInternalException(ex);
-                }
-                catch (SettingsException ex)
-                {
-                    ExceptionDispatchInfo.Capture(ex).Throw();
-                }
-                catch (RequestException ex) // rethrow request exceptions
-                {
-                    ExceptionDispatchInfo.Capture(ex).Throw();
-                }
+                retrievedData = await UpdateEndpointAllAsync(settings);
 
                 if (retrievedData != null) // if data is null, keep previous data
                 {
-                    _directlyAccessibleData = retrievedData;
+                    _endpointData = retrievedData;
                 }
 
                 return;
             }
 
-            try
+            if (_client.HasBlobData)
             {
-                retrievedData = await UpdateEndpointGetAsync(_client, settings);
-            }
-            catch (ArgumentNullException ex)
-            {
-                throw new ApiParserInternalException(ex);
-            }
-            catch (InvalidOperationException ex)
-            {
-                throw new ApiParserInternalException(ex);
-            }
-            catch (ApiParserInternalException ex)
-            {
-                throw new ApiParserInternalException(ex);
-            }
-            catch (SettingsException ex)
-            {
-                ExceptionDispatchInfo.Capture(ex).Throw();
-            }
-            catch (RequestException ex) // rethrow request exceptions
-            {
-                ExceptionDispatchInfo.Capture(ex).Throw();
+                retrievedData = await UpdateEndpointGetAsync(settings);
+
+                if (retrievedData != null) // if data is null, keep previous data
+                {
+                    _endpointData = retrievedData;
+                }
+
+                return;
             }
 
-            if (retrievedData != null) // if data is null, keep previous data
-            {
-                _directlyAccessibleData = retrievedData;
-            }
-        }
-
-        /// <exception cref="ArgumentNullException"></exception>
-        /// <exception cref="ApiParserInternalException"></exception>
-        /// <exception cref="EndpointRequestException"></exception>
-        /// <exception cref="InvalidOperationException"></exception>
-        /// <exception cref="SettingsException"></exception>
-        /// <exception cref="RequestException"> All kinds of sub types.</exception>
-        private async Task UpdateIndirectEndpoint(QuerySettings settings, object id)
-        {
-            if (id == null)
-            {
-                throw new ArgumentNullException(nameof(id));
-            }
-            
-            if (!_indirectlyAccessibleData.ContainsKey(id))
-            {
-                try
-                {
-                    _indirectlyAccessibleData[id] = new GuildEndpointManager(_apiClient, Endpoint, Cooldown, _guildClient, id);
-                }
-                catch (ArgumentNullException ex)
-                {
-                    throw new ApiParserInternalException($"An internal exception occured while attempting to update " +
-                        $"indirect endpoint with {nameof(id)} {id}.", ex);
-                }
-                catch (ApiParserInternalException ex)
-                {
-                    throw new ApiParserInternalException($"An internal exception occured while attempting to update " +
-                        $"indirect endpoint with {nameof(id)} {id}.", ex);
-                }
-                catch (EndpointException ex)
-                {
-                    throw new EndpointRequestException($"Unable to update indirect endpoint with {nameof(id)} {id}.", ex);
-                }
-            }
-
-            try
-            {
-                await _indirectlyAccessibleData[id].UpdateEndpoint(settings, id);
-            }
-            catch (ArgumentNullException ex)
-            {
-                throw new ApiParserInternalException(ex);
-            }
-            catch (InvalidOperationException ex)
-            {
-                ExceptionDispatchInfo.Capture(ex).Throw();
-            }
-            catch (ApiParserInternalException ex)
-            {
-                throw new ApiParserInternalException(ex);
-            }
-            catch (SettingsException ex)
-            {
-                ExceptionDispatchInfo.Capture(ex).Throw();
-            }
-            catch (RequestException ex) // rethrow request exceptions
-            {
-                ExceptionDispatchInfo.Capture(ex).Throw();
-            }
+            throw new NotImplementedException();
         }
 
         /// <summary>
@@ -745,49 +308,21 @@ namespace ApiParser.V2
         /// <param name="endpointClient"></param>
         /// <param name="settings"></param>
         /// <returns></returns>
-        /// <exception cref="ArgumentNullException"></exception>
         /// <exception cref="InvalidOperationException"></exception>
         /// <exception cref="ApiParserInternalException"></exception>
         /// <exception cref="SettingsException"></exception>
         /// <exception cref="RequestException"> All kinds of sub types.</exception>
-        private async Task<object> UpdateEndpointGetAsync(IEndpointClient endpointClient, QuerySettings settings)
+        private async Task<object> UpdateEndpointGetAsync(QuerySettings settings)
         {
-            if (endpointClient == null)
-            {
-                throw new ArgumentNullException(nameof(endpointClient));
-            }
-
             string methodName = "GetAsync";
 
-            // TODO: seperate guild endpoint more clearly from this mess.
-            if (!Endpoint.IsDirectlyAccessible && !endpointClient.IsBulkExpandable && !(Endpoint.Parts.Last().EndpointName == "Guild"))
+            if (!_client.HasBlobData)
             {
-                throw new InvalidOperationException($"Can't invoke {methodName} on endpoint {endpointClient.EndpointPath}. Endpoint " +
-                    $"is not directly accessible or client is not bulk expandable.");
+                throw new InvalidOperationException($"Can't invoke {methodName} on endpoint {_client.EndpointPath}. Endpoint " +
+                    $"has not blob data.");
             }
 
-            try
-            {
-                return await InvokeUpdate(endpointClient, methodName, new object[] { new CancellationToken() }, settings);
-            }
-            catch (ArgumentNullException ex)
-            {
-                throw new ApiParserInternalException(ex);
-            }
-            catch (ApiParserInternalException ex)
-            {
-                throw new ApiParserInternalException(ex);
-            }
-            catch (SettingsException ex)
-            {
-                ExceptionDispatchInfo.Capture(ex).Throw();
-                throw; // just to get rid of warnings
-            }
-            catch (RequestException ex) // rethrow request exceptions
-            {
-                ExceptionDispatchInfo.Capture(ex).Throw();
-                throw; // just to get rid of warnings
-            }
+            return await InvokeUpdate(methodName, new object[] { new CancellationToken() }, settings);
         }
 
         /// <summary>
@@ -797,48 +332,21 @@ namespace ApiParser.V2
         /// <param name="endpointClient"></param>
         /// <param name="settings"></param>
         /// <returns></returns>
-        /// <exception cref="ArgumentNullException"></exception>
         /// <exception cref="InvalidOperationException"></exception>
         /// <exception cref="ApiParserInternalException"></exception>
         /// <exception cref="SettingsException"></exception>
         /// <exception cref="RequestException"> All kinds of sub types.</exception>
-        private async Task<object> UpdateEndpointAllAsync(IEndpointClient endpointClient, QuerySettings settings)
-        {
-            if (endpointClient == null)
-            {
-                throw new ArgumentNullException(nameof(endpointClient));
-            }
-            
+        private async Task<object> UpdateEndpointAllAsync(QuerySettings settings)
+        {   
             string methodName = "AllAsync";
 
-            if (!Endpoint.IsDirectlyAccessible && !_client.IsAllExpandable)
+            if (!_client.IsAllExpandable)
             {
-                throw new InvalidOperationException($"Can't invoke {methodName} on endpoint {endpointClient.EndpointPath}. Endpoint " +
+                throw new InvalidOperationException($"Can't invoke {methodName} on endpoint {_client.EndpointPath}. Endpoint " +
                     $"is not directly accessible or client is not all expandable.");
             }
 
-            try
-            {
-                return await InvokeUpdate(endpointClient, methodName, new object[] { new CancellationToken() }, settings);
-            }
-            catch (ArgumentNullException ex)
-            {
-                throw new ApiParserInternalException(ex);
-            }
-            catch (ApiParserInternalException ex)
-            {
-                throw new ApiParserInternalException(ex);
-            }
-            catch (SettingsException ex)
-            {
-                ExceptionDispatchInfo.Capture(ex).Throw();
-                throw; // just to get rid of warnings
-            }
-            catch (RequestException ex) // rethrow request exceptions
-            {
-                ExceptionDispatchInfo.Capture(ex).Throw();
-                throw; // just to get rid of warnings
-            }
+            return await InvokeUpdate(methodName, new object[] { new CancellationToken() }, settings);
         }
 
         /// <summary>
@@ -854,12 +362,8 @@ namespace ApiParser.V2
         /// <exception cref="ApiParserInternalException"></exception>
         /// <exception cref="SettingsException"></exception>
         /// <exception cref="RequestException"> All kinds of sub types.</exception>
-        private async Task<object> InvokeUpdate(IEndpointClient endpointClient, string methodName, object[] parameters, QuerySettings settings)
-        {   
-            if (endpointClient == null)
-            {
-                throw new ArgumentNullException(nameof(endpointClient));
-            }
+        private async Task<object> InvokeUpdate(string methodName, object[] parameters, QuerySettings settings)
+        {
             if (string.IsNullOrWhiteSpace(methodName))
             {
                 throw new ArgumentNullException(nameof(methodName));
@@ -873,7 +377,7 @@ namespace ApiParser.V2
 
             try
             {
-                result = await HandleResolveMode(endpointClient, methodName, parameters, settings);
+                result = await HandleResolveMode(methodName, parameters, settings);
             }
             catch (ArgumentNullException ex)
             {
@@ -900,12 +404,8 @@ namespace ApiParser.V2
         /// <exception cref="SettingsException"></exception>
         /// <exception cref="ApiParserInternalException"></exception>
         /// <exception cref="RequestException"> All kinds of sub types.</exception>
-        private async Task<object> HandleResolveMode(IEndpointClient endpointClient, string methodName, object[] parameters, QuerySettings settings)
+        private async Task<object> HandleResolveMode(string methodName, object[] parameters, QuerySettings settings)
         {
-            if (endpointClient == null)
-            {
-                throw new ArgumentNullException(nameof(endpointClient));
-            }
             if (string.IsNullOrWhiteSpace(methodName))
             {
                 throw new ArgumentNullException(nameof(methodName));
@@ -921,21 +421,21 @@ namespace ApiParser.V2
             {
                 case ResolveMode.None:
                     {
-                        throw new SettingsException($"Unable to update endpoint {endpointClient?.EndpointPath}, because " +
+                        throw new SettingsException($"Unable to update endpoint {_client?.EndpointPath}, because " +
                             $"{nameof(settings)} did not specify a {typeof(ResolveMode)}.");
                     }
                 case ResolveMode.Retry:
                     {
                         if (settings.RetryAmount < 1 || settings.RetryDelay < 0)
                         {
-                            throw new SettingsException($"Unable to update endpoint {endpointClient?.EndpointPath}, because " +
+                            throw new SettingsException($"Unable to update endpoint {_client?.EndpointPath}, because " +
                                 $"{nameof(settings)} did not specify a valid {nameof(settings.RetryAmount)} or " +
                                 $"{nameof(settings.RetryDelay)}.");
                         }
 
                         try
                         {
-                            result = await RetryRetryable(endpointClient, methodName, parameters, settings.RetryAmount, settings.RetryDelay);
+                            result = await RetryRetryable(methodName, parameters, settings.RetryAmount, settings.RetryDelay);
                         }
                         catch (ArgumentNullException ex)
                         {
@@ -960,14 +460,14 @@ namespace ApiParser.V2
                     {
                         if (settings.RetryAmount < 1 || settings.RetryDelay < 0)
                         {
-                            throw new SettingsException($"Unable to update endpoint {endpointClient?.EndpointPath}, because " +
+                            throw new SettingsException($"Unable to update endpoint {_client?.EndpointPath}, because " +
                                 $"{nameof(settings)} did not specify a valid {nameof(settings.RetryAmount)} or " +
                                 $"{nameof(settings.RetryDelay)}.");
                         }
 
                         try
                         {
-                            result = await RetryRetryable(endpointClient, methodName, parameters, settings.RetryAmount, settings.RetryDelay);
+                            result = await RetryRetryable(methodName, parameters, settings.RetryAmount, settings.RetryDelay);
                         }
                         catch (ArgumentNullException ex)
                         {
@@ -981,7 +481,7 @@ namespace ApiParser.V2
                         {
                             throw new ApiParserInternalException(ex);
                         }
-                        catch (RequestException) // rethrow request exceptions
+                        catch (RequestException)
                         {
                             // don't do anything, just use the previous value
                         }
@@ -992,14 +492,14 @@ namespace ApiParser.V2
                     {
                         if (settings.RetryAmount < 1 || settings.RetryDelay < 0)
                         {
-                            throw new SettingsException($"Unable to update endpoint {endpointClient?.EndpointPath}, because " +
+                            throw new SettingsException($"Unable to update endpoint {_client?.EndpointPath}, because " +
                                 $"{nameof(settings)} did not specify a valid {nameof(settings.RetryAmount)} or " +
                                 $"{nameof(settings.RetryDelay)}.");
                         }
 
                         try
                         {
-                            result = await RetryRetryable(endpointClient, methodName, parameters, 1, 0);
+                            result = await RetryRetryable(methodName, parameters, 1, 0);
                         }
                         catch (ArgumentNullException ex)
                         {
@@ -1013,7 +513,7 @@ namespace ApiParser.V2
                         {
                             throw new ApiParserInternalException(ex);
                         }
-                        catch (RequestException) // rethrow request exceptions
+                        catch (RequestException)
                         {
                             // don't do anything, just use the previous value
                         }
@@ -1033,13 +533,8 @@ namespace ApiParser.V2
         /// <exception cref="ArgumentException"></exception>
         /// <exception cref="ApiParserInternalException"></exception>
         /// <exception cref="RequestException"> All kinds of sub types.</exception>
-        private async Task<object> RetryRetryable(IEndpointClient endpoint, string methodName, object[] parameters, int amount, int delay)
-        {
-            if (endpoint == null)
-            {
-                throw new ArgumentNullException(nameof(endpoint));
-            }
-            
+        private async Task<object> RetryRetryable(string methodName, object[] parameters, int amount, int delay)
+        {   
             if (string.IsNullOrWhiteSpace(methodName))
             {
                 throw new ArgumentNullException(nameof(methodName));
@@ -1069,7 +564,7 @@ namespace ApiParser.V2
 
                 try
                 {
-                    result = await ReflectionUtil.InvokeAsyncMethodAsync<object>(endpoint, methodName, parameters);
+                    result = await ReflectionUtil.InvokeAsyncMethodAsync<object>(_client, methodName, parameters);
                 }
                 catch (ArgumentNullException ex)
                 {

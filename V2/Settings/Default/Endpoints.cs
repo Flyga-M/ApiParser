@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ApiParser.V2.Endpoint;
+using System;
 using System.Linq;
 
 namespace ApiParser.V2.Settings.Default
@@ -9,7 +10,7 @@ namespace ApiParser.V2.Settings.Default
         /// The default (authenticated) endpoints that are supported by this library.
         /// </summary>
         public static readonly Endpoint.Endpoint[] Default = GetEndpoints();
-        
+
         /// <summary>
         /// Returns the default (authenticated) endpoints that are supported by this library.
         /// </summary>
@@ -118,5 +119,50 @@ namespace ApiParser.V2.Settings.Default
 
             return names.Select(name => Endpoint.Endpoint.FromString(name, settings.Value)).ToArray();
         }
+
+        public static Endpoint.Endpoint CharacterEndpoint = new Endpoint.Endpoint(
+            new EndpointPart[]
+            {
+                new EndpointPart(
+                    "Characters",
+                    ParseSettings.Default,
+                    true,
+                    new Type[] { typeof(int), typeof(string) },
+                    null,
+                    new Endpoint.Endpoint[]
+                    {
+                        Endpoint.Endpoint.FromString("BuildTabs.Active", ParseSettings.Default),
+                        Endpoint.Endpoint.FromString("EquipmentTabs.Active", ParseSettings.Default),
+                        Endpoint.Endpoint.FromString("HeroPoints", ParseSettings.Default),
+                        Endpoint.Endpoint.FromString("Quests", ParseSettings.Default),
+                        Endpoint.Endpoint.FromString("Sab", ParseSettings.Default)
+                    }
+                )
+            },
+            ParseSettings.Default);
+
+        public static Endpoint.Endpoint GuildEndpoint = new Endpoint.Endpoint(
+            new EndpointPart[]
+            {
+                new EndpointPart(
+                    "Guild",
+                    ParseSettings.Default,
+                    false,
+                    new Type[] { typeof(Guid) },
+                    null,
+                    new Endpoint.Endpoint[]
+                    {
+                        Endpoint.Endpoint.FromString("Log", ParseSettings.Default),
+                        Endpoint.Endpoint.FromString("Members", ParseSettings.Default),
+                        Endpoint.Endpoint.FromString("Ranks", ParseSettings.Default),
+                        Endpoint.Endpoint.FromString("Stash", ParseSettings.Default),
+                        Endpoint.Endpoint.FromString("Storage", ParseSettings.Default),
+                        Endpoint.Endpoint.FromString("Treasury", ParseSettings.Default),
+                        Endpoint.Endpoint.FromString("Teams", ParseSettings.Default),
+                        Endpoint.Endpoint.FromString("Upgrades", ParseSettings.Default)
+                    }
+                )
+            },
+            ParseSettings.Default);
     }
 }
