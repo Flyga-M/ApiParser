@@ -3,6 +3,7 @@ using ApiParser.V2.Settings;
 using Gw2Sharp.WebApi.Exceptions;
 using Gw2Sharp.WebApi.V2;
 using Gw2Sharp.WebApi.V2.Clients;
+using Gw2Sharp.WebApi.V2.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,7 +16,6 @@ using System.Threading.Tasks;
 
 namespace ApiParser.V2
 {
-    // TODO: implement proper support for sub endpoints (e.g. Guild[GUID].Logs, Characters[INT:STRING].BuildTabs.Active)
     public class EndpointManager
     {
         private IGw2WebApiV2Client _apiClient;
@@ -123,6 +123,11 @@ namespace ApiParser.V2
                 throw new ApiParserInternalException(ex);
             }
             catch (RequestException ex) // TODO: maybe convert earlier in lower levels.
+            {
+                throw new EndpointRequestException($"Unable to resolve query {queryData}, " +
+                    $"because the API response threw an exception.", ex);
+            }
+            catch (RequestException<ErrorObject> ex) // This is necessary, because at v1.7.4 RequestException<T> does not inherit from RequestException
             {
                 throw new EndpointRequestException($"Unable to resolve query {queryData}, " +
                     $"because the API response threw an exception.", ex);
