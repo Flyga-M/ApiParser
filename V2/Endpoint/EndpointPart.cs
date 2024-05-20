@@ -223,7 +223,7 @@ namespace ApiParser.V2.Endpoint
                 result += Settings.IndexClose;
             }
 
-            return base.ToString();
+            return result;
         }
     }
 }
