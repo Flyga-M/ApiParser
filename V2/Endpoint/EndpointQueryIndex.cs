@@ -5,224 +5,187 @@ using System.Threading.Tasks;
 
 namespace ApiParser.V2.Endpoint
 {
-    public struct EndpointQueryIndex
+    public class EndpointQueryIndex
     {
-        public ParseSettings Settings;
-        
-        public string Index;
+        public ParseSettings Settings { get; }
 
-        public bool IsVariable;
+        public bool IsVariable => Variable != null;
 
-        public Type IndexType;
+        public Type IndexType { get; }
 
-        public string Variable;
+        public string Variable { get; }
 
-        public object Value;
+        public object Value { get; }
 
         /// <exception cref="ArgumentNullException"></exception>
-        /// <exception cref="QueryParsingException"></exception>
-        /// <exception cref="ApiParserInternalException"></exception>
-        /// <exception cref="QueryNotSupportedException"></exception>
-        /// <exception cref="SettingsException"></exception>
-        public EndpointQueryIndex(string index, ParseSettings settings)
+        /// <exception cref="ArgumentException"></exception>
+        public EndpointQueryIndex(object value, ParseSettings settings)
         {
-            if (string.IsNullOrWhiteSpace(index))
-            {
-                throw new ArgumentNullException("index");
-            }
-
-            Settings = settings;
-
-            Index = index;
-
-            IsVariable = false;
-            IndexType = null;
-            Variable = string.Empty;
-            Value = null;
-
-            try
-            {
-                ResolveIndex(settings);
-            }
-            catch (InvalidOperationException ex)
-            {
-                throw new QueryParsingException("Unable to resolve index.", ex);
-            }
-            catch (ApiParserInternalException ex)
-            {
-                throw new ApiParserInternalException(ex);
-            }
-            catch (QueryNotSupportedException ex)
-            {
-                throw new QueryNotSupportedException($"Index type for index {index} not supported.", ex);
-            }
-            catch (SettingsException ex)
-            {
-                throw new SettingsException($"Unable to parse index {index}.", ex);
-            }
-            catch (QueryParsingException ex)
-            {
-                throw new QueryParsingException($"Unable to parse index {index}.", ex);
-            }
-        }
-
-        /// <exception cref="InvalidOperationException"></exception>
-        /// <exception cref="QueryNotSupportedException"></exception>
-        /// <exception cref="ApiParserInternalException"></exception>
-        /// <exception cref="SettingsException"></exception>
-        /// <exception cref="QueryParsingException"></exception>
-        private void ResolveIndex(ParseSettings settings)
-        {
-            string[] parts = Index.Split(settings.IndexSeparator);
-
-            if (parts.Length != 2)
-            {
-                throw new InvalidOperationException($"Index {Index} must consist of two parts, separated by \"{settings.IndexSeparator}\".");
-            }
-
-            string type = parts[0];
-            string value = parts[1];
-
-            if (!TryResolveType(type, settings))
-            {
-                throw new QueryNotSupportedException($"Index {Index} type {type} is not supported.");
-            }
-
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                throw new InvalidOperationException($"Index {Index} must have a non empty value.");
-            }
-
-            if (value.StartsWith(settings.IndexVariableIdentifier)) // is variable
-            {
-                try
-                {
-                    ResolveVariable(value, settings);
-                }
-                catch (ArgumentNullException ex)
-                {
-                    throw new ApiParserInternalException(ex);
-                }
-                catch (ApiParserInternalException ex)
-                {
-                    throw new ApiParserInternalException(ex);
-                }
-
-                return;
-            }
-
-            try
-            {
-                Value = ResolveValue(value, settings);
-            }
-            catch (InvalidOperationException ex)
-            {
-                throw new ApiParserInternalException(ex);
-            }
-            catch (ArgumentException ex)
-            {
-                throw new ApiParserInternalException(ex);
-            }
-            catch (SettingsException ex)
-            {
-                throw new SettingsException($"Unable to resolve value {value}.", ex);
-            }
-            catch (QueryParsingException ex)
-            {
-                throw new QueryParsingException($"Unable to resolve value {value}.", ex);
-            }
-            catch (Exception ex)
-            {
-                throw new ApiParserInternalException("Unhandled exception occured.", ex);
-            }
-        }
-
-        private bool TryResolveType(string identifier, ParseSettings settings)
-        {
-            IndexType = settings.GetType(identifier);
-
-            return IndexType != null;
-        }
-
-        /// <exception cref="ArgumentNullException"></exception>
-        /// <exception cref="ApiParserInternalException"></exception>
-        private void ResolveVariable(string variable, ParseSettings settings)
-        {
-            if (string.IsNullOrWhiteSpace(variable))
-            {
-                throw new ArgumentNullException(nameof(variable));
-            }
-
-            if (!variable.StartsWith(settings.IndexVariableIdentifier))
-            {
-                throw new ApiParserInternalException($"Variable {variable} passed to ResolveVariable(..) does not start " +
-                    $"with variable identifier. Expected identifier: \"{settings.IndexVariableIdentifier}\".");
-            }
-
-            if (IndexType == null)
-            {
-                throw new ApiParserInternalException($"Variable {variable} was passed to ResolveVariable(..), but the " +
-                    $"index type was not yet resolved.");
-            }
-
-            Variable = variable.Substring(settings.IndexVariableIdentifier.Length);
-            IsVariable = true;
-            Value = null;
-        }
-
-        /// <exception cref="ArgumentNullException"></exception>
-        /// <exception cref="InvalidOperationException"></exception>
-        /// <exception cref="SettingsException"></exception>
-        /// <exception cref="QueryParsingException"></exception>
-        private object ResolveValue(string value, ParseSettings settings)
-        {
-            if (string.IsNullOrWhiteSpace(value))
+            if (value == null)
             {
                 throw new ArgumentNullException(nameof(value));
             }
 
-            if (IndexType == null)
+            Type indexType = value.GetType();
+
+            if (!settings.IndexTypes.Contains(indexType))
             {
-                throw new InvalidOperationException($"Value {value} was passed to ResolveValue(..), but the " +
-                    $"index type was not yet resolved.");
+                throw new ArgumentException($"{nameof(indexType)} must be convertable by the {nameof(settings)}.", nameof(indexType));
             }
 
-            Type indexType = IndexType;
+            IndexType = indexType;
+            Value = value;
+            Variable = null;
+            Settings = settings;
+        }
 
-            IIndexConverter converter = settings.IndexConverters.FirstOrDefault(conv => conv.Type == indexType);
-
-            if (converter == null)
+        /// <exception cref="ArgumentNullException"></exception>
+        /// <exception cref="ArgumentException"></exception>
+        public EndpointQueryIndex(Type indexType, string variable, ParseSettings settings)
+        {
+            if (indexType == null)
             {
-                throw new InvalidOperationException($"No converter for the type " +
-                    $"{indexType} could be found.");
+                throw new ArgumentNullException(nameof(indexType));
             }
 
-            if (!converter.TryConvert(value, out object result))
+            if (variable == null)
             {
-                throw new QueryParsingException($"Value {value} could not be converted to index type {IndexType}.");
+                throw new ArgumentNullException(nameof(variable));
             }
 
-            if (result.GetType() != IndexType)
+            if (string.IsNullOrWhiteSpace(variable))
             {
-                throw new SettingsException($"IndexConverter for type {IndexType} did successfully convert value " +
-                    $"{value}, but value is not of promised type {IndexType}.");
+                throw new ArgumentException($"{nameof(variable)} can't be empty or whitespace.", nameof(variable));
+            }
+
+            if (!settings.IndexTypes.Contains(indexType))
+            {
+                throw new ArgumentException($"{nameof(indexType)} must be convertable by the {nameof(settings)}.", nameof(indexType));
+            }
+
+            IndexType = indexType;
+            Value = null;
+            Variable = variable;
+            Settings = settings;
+        }
+
+        /// <exception cref="ArgumentNullException"></exception>
+        /// <exception cref="ArgumentException"></exception>
+        /// <exception cref="QueryParsingException">When the given <paramref name="index"/> can't be parsed 
+        /// correctly.</exception>
+        /// <exception cref="SettingsException">When the converted value is not of the type that the 
+        /// <paramref name="settings"/> IndexConverter promised.</exception>
+        public static EndpointQueryIndex FromString(string index, ParseSettings? settings = null)
+        {
+            if (index == null)
+            {
+                throw new ArgumentNullException(nameof(index));
+            }
+
+            if (string.IsNullOrWhiteSpace(index))
+            {
+                throw new ArgumentException($"{nameof(index)} can't be empty or whitespace.", nameof(index));
+            }
+
+            if (!settings.HasValue)
+            {
+                settings = ParseSettings.Default;
+            }
+
+            Type indexType = GetType(index, settings.Value, out string valueString);
+
+            if (indexType == null)
+            {
+                throw new QueryParsingException($"{nameof(settings)} don't provide an appropriate indexConverter for the given " +
+                    $"identifier in the {nameof(index)} {index}.");
+            }
+
+            string variableString = GetVariable(valueString, settings.Value);
+
+            if (variableString != null)
+            {
+                return new EndpointQueryIndex(indexType, variableString, settings.Value);
+            }
+
+            object value = GetValue(valueString, indexType, settings.Value);
+
+            return new EndpointQueryIndex(value, settings.Value);
+        }
+
+        /// <exception cref="QueryParsingException"></exception>
+        private static Type GetType(string id, ParseSettings settings, out string valueString)
+        {
+            string[] parts = id.Split(settings.IndexSeparator);
+
+            if (parts.Length != 2)
+            {
+                throw new QueryParsingException($"{nameof(id)} {id} must consist of two parts, separated by \"{settings.IndexSeparator}\".");
+            }
+
+            string identifier = parts[0];
+            valueString = parts[1];
+
+            if (string.IsNullOrWhiteSpace(identifier))
+            {
+                throw new QueryParsingException($"Type {nameof(identifier)} for {nameof(id)} {id} can't be null, " +
+                    $"empty or whitespace.");
+            }
+
+            if (string.IsNullOrWhiteSpace(valueString))
+            {
+                throw new QueryParsingException($"Type {nameof(valueString)} for {nameof(id)} {id} can't be null, " +
+                    $"empty or whitespace.");
+            }
+
+            return settings.GetType(identifier);
+        }
+
+        private static string GetVariable(string valueString, ParseSettings settings)
+        {
+            if (!valueString.StartsWith(settings.IndexVariableIdentifier))
+            {
+                return null;
+            }
+
+            return valueString.Substring(settings.IndexVariableIdentifier.Length);
+        }
+
+        /// <exception cref="QueryParsingException"></exception>
+        /// <exception cref="SettingsException"></exception>
+        private static object GetValue(string valueString, Type valueType, ParseSettings settings)
+        {
+            IIndexConverter converter = settings.IndexConverters.FirstOrDefault(conv => conv.Type == valueType);
+
+            if (converter == null) // TODO: maybe remove? should not occur, because we checked if the type exists in the settings earlier
+            {
+                throw new QueryParsingException($"No index converter for the type " +
+                    $"{valueType} could be found.");
+            }
+
+            if (!converter.TryConvert(valueString, out object result))
+            {
+                throw new QueryParsingException($"Value {valueString} could not be converted to {nameof(valueType)} {valueType}.");
+            }
+
+            if (result.GetType() != valueType)
+            {
+                throw new SettingsException($"IndexConverter for type {valueType} did successfully convert value " +
+                    $"{valueString}, but value is not of promised type {valueType}. Given type: {result.GetType()}");
             }
 
             return result;
         }
+
         /// <summary>
         /// Returns a <see cref="Task"/> that represents the resolved variable, or <see langword="null"/> 
         /// if the variable can't be resolved by the <paramref name="resolver"/>.
         /// </summary>
         /// <param name="resolver"></param>
-        /// <returns></returns>
+        /// <returns>A <see cref="Task"/> that represents the resolved variable, or <see langword="null"/> 
+        /// if the variable can't be resolved by the <paramref name="resolver"/>.</returns>
         /// <exception cref="InvalidOperationException">If the <see cref="EndpointQueryIndex"/> is not a variable.</exception>
         /// <exception cref="ArgumentNullException">If <paramref name="resolver"/> is <see langword="null"/>.</exception>
-        /// <exception cref="ArgumentException">If <paramref name="resolver"/> returns a value, that fails to 
-        /// be converted to the <see cref="IndexType"/>.</exception>
-        /// <exception cref="ApiParserInternalException">If an internal exception occurs.</exception>
-        /// <exception cref="SettingsException">If an exception related to the <see cref="Settings"/> 
-        /// occurs.</exception>
+        /// <inheritdoc cref="GetValue(string, Type, ParseSettings)"/>
         public async Task<object> ResolveVariable(IQueryVariableResolver resolver)
         {
             if (!IsVariable)
@@ -242,35 +205,20 @@ namespace ApiParser.V2.Endpoint
                 return null;
             }
 
-            object result;
+            return GetValue(value, IndexType, Settings);
+        }
 
-            try
+        /// <inheritdoc/>
+        public override string ToString()
+        {
+            string identifier = Settings.GetIdentifier(IndexType);
+
+            if (IsVariable)
             {
-                result = ResolveValue(value, Settings);
-            }
-            catch (InvalidOperationException ex)
-            {
-                throw new ApiParserInternalException(ex);
-            }
-            catch (ArgumentNullException ex)
-            {
-                throw new ApiParserInternalException(ex);
-            }
-            catch (SettingsException ex)
-            {
-                throw new SettingsException($"Unable to resolve value {value}.", ex);
-            }
-            catch (QueryParsingException ex) // value could not be resolved (the returned string fails to be converted)
-            {
-                throw new ArgumentException($"Returned value {value} from {nameof(resolver)} could not be " +
-                    $"converted to the provided variable index type {IndexType}.", ex);
-            }
-            catch (Exception ex)
-            {
-                throw new ApiParserInternalException("Unhandled exception occured.", ex);
+                return $"{identifier}{Settings.IndexSeparator}{Variable}";
             }
 
-            return result;
+            return $"{identifier}{Settings.IndexSeparator}{Value}";
         }
     }
 }

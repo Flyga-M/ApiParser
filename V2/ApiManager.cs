@@ -39,6 +39,11 @@ namespace ApiParser.V2
         // TODO: document and add exceptions
         public async Task<object> Query(EndpointQuery query, QuerySettings? settings = null)
         {
+            if (query == null)
+            {
+                throw new ArgumentNullException(nameof(query));
+            }
+            
             if (!settings.HasValue)
             {
                 settings = QuerySettings.Default;

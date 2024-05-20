@@ -5,176 +5,142 @@ using System.Linq;
 
 namespace ApiParser.V2.Endpoint
 {
-    public struct EndpointQueryPart
+    public class EndpointQueryPart
     {
-        public string Id;
+        public ParseSettings Settings { get; }
 
-        public string EndpointName;
+        public string EndpointName { get; }
 
-        public bool Enumerate;
+        public bool Enumerate => Indices?.Any() ?? false;
 
-        public EndpointQueryIndex[] Indices;
+        public EndpointQueryIndex[] Indices { get; }
 
         public bool ContainsVariable => Indices?.Any(index => index.IsVariable) ?? false;
 
         /// <exception cref="ArgumentNullException"></exception>
-        /// <exception cref="QueryParsingException"></exception>
-        /// <exception cref="ApiParserInternalException"></exception>
-        /// <exception cref="QueryNotSupportedException"></exception>
-        /// <exception cref="SettingsException"></exception>
-        public EndpointQueryPart(string id, ParseSettings settings)
+        /// <exception cref="ArgumentException"></exception>
+        public EndpointQueryPart(string endpointName, IEnumerable<EndpointQueryIndex> indices, ParseSettings settings)
         {
-            if (string.IsNullOrEmpty(id))
+            if (endpointName == null)
+            {
+                throw new ArgumentNullException(nameof(endpointName));
+            }
+
+            if (string.IsNullOrWhiteSpace(endpointName))
+            {
+                throw new ArgumentException($"{nameof(endpointName)} can't be empty or whitespace.", nameof(endpointName));
+            }
+
+            if (indices == null)
+            {
+                indices = Array.Empty<EndpointQueryIndex>();
+            }
+
+            if (indices.Any(index => index == null))
+            {
+                throw new ArgumentException($"{nameof(indices)} can't have elements that are null.", nameof(indices));
+            }
+
+            EndpointName = endpointName;
+            Indices = indices.ToArray();
+            Settings = settings;
+        }
+
+        /// <exception cref="ArgumentNullException"></exception>
+        /// <exception cref="ArgumentException"></exception>
+        /// <exception cref="QueryParsingException">When the given <paramref name="id"/> can't be parsed 
+        /// correctly.</exception>
+        /// <exception cref="SettingsException">When the converted value of any index is not of the type that the 
+        /// <paramref name="settings"/> IndexConverter promised.</exception>
+        public static EndpointQueryPart FromString(string id, ParseSettings? settings = null)
+        {
+            if (id == null)
             {
                 throw new ArgumentNullException(nameof(id));
             }
 
-            Id = id;
-
-            EndpointName = string.Empty;
-            Enumerate = false;
-            Indices = Array.Empty<EndpointQueryIndex>();
-
-            try
+            if (string.IsNullOrWhiteSpace(id))
             {
-                ResolveId(settings);
-            }
-            catch (InvalidOperationException ex)
-            {
-                throw new QueryParsingException($"EndpointQueryPart id {Id} could not be parsed.", ex);
-            }
-            catch (ApiParserInternalException ex)
-            {
-                throw new ApiParserInternalException(ex);
-            }
-            catch (QueryParsingException ex)
-            {
-                throw new QueryParsingException($"EndpointQueryPart id {Id} could not be parsed.", ex);
-            }
-            catch (QueryNotSupportedException ex)
-            {
-                throw new QueryNotSupportedException($"EndpointQueryPart id {id} is not supported.", ex);
-            }
-            catch (SettingsException ex)
-            {
-                throw new SettingsException($"EndpointQueryPart id {id} could not be parsed.", ex);
+                throw new ArgumentException($"{nameof(id)} can't be empty or whitespace.", nameof(id));
             }
 
-            Enumerate = Indices.Length > 0;
+            if (!settings.HasValue)
+            {
+                settings = ParseSettings.Default;
+            }
+
+            string endpointName = GetEndpointName(id, settings.Value, out string[] indices);
+
+            if (indices == null || !indices.Any())
+            {
+                return new EndpointQueryPart(endpointName, null, settings.Value);
+            }
+
+            EndpointQueryIndex[] queryIndices = GetIndices(indices, settings.Value);
+
+            return new EndpointQueryPart(endpointName, queryIndices, settings.Value);
         }
 
-        /// <exception cref="InvalidOperationException"></exception>
-        /// <exception cref="ApiParserInternalException"></exception>
         /// <exception cref="QueryParsingException"></exception>
-        /// <exception cref="QueryNotSupportedException"></exception>
-        /// <exception cref="SettingsException"></exception>
-        private void ResolveId(ParseSettings settings)
+        private static string GetEndpointName(string id, ParseSettings settings, out string[] indices)
         {
-            if (!Id.Contains(settings.IndexOpen) && !Id.Contains(settings.IndexClose))
+            indices = null;
+            string[] parts = id.Split(new char[] { settings.IndexOpen }, 2);
+
+            string name = parts[0];
+
+            if (parts.Length == 1)
             {
-                EndpointName = Id;
-                return;
+                return name;
             }
 
-            if (!Id.EndsWith(settings.IndexClose))
+            string rest = settings.IndexOpen + parts[1];
+
+            if (!BracketUtil.TryGetInnerContents(rest, settings.IndexOpen, settings.IndexClose, out indices))
             {
-                throw new InvalidOperationException($"The part contains " +
-                    $"{settings.IndexOpen} but not {settings.IndexClose}.");
+                throw new QueryParsingException($"Unable to parse {nameof(id)} {id} to {typeof(EndpointQueryPart)}. " +
+                    $"Index brackets are not well formed.");
             }
 
-            string[] parts = Id.Split(settings.IndexOpen);
-
-            string endpointName = parts[0];
-
-            if (string.IsNullOrWhiteSpace(endpointName))
-            {
-                throw new InvalidOperationException($"The endpointName can't be null, " +
-                    $"empty or whitespace.");
-            }
-
-            EndpointName = endpointName;
-
-            List<EndpointQueryIndex> indices = new List<EndpointQueryIndex>();
-
-            foreach (string part in parts.Skip(1))
-            {
-                if (!part.EndsWith(settings.IndexClose))
-                {
-                    throw new InvalidOperationException($"An index that is opened " +
-                        $"with {settings.IndexOpen} must be closed with {settings.IndexClose}.");
-                }
-
-                string index = part.Remove(part.Length - 1);
-
-                try
-                {
-                    ResolveIndex(index, settings, ref indices);
-                }
-                catch (ArgumentNullException ex)
-                {
-                    throw new InvalidOperationException($"The provided index value \"{index}\" can't be null or empty.", ex);
-                }
-                catch (ApiParserInternalException ex)
-                {
-                    throw new ApiParserInternalException(ex);
-                }
-                catch (QueryParsingException ex)
-                {
-                    throw new QueryParsingException($"The provided index value \"{index}\" could not be parsed correctly.", ex);
-                }
-                catch (QueryNotSupportedException ex)
-                {
-                    throw new QueryNotSupportedException($"Index {index} is not supported.", ex);
-                }
-                catch (SettingsException ex)
-                {
-                    throw new SettingsException($"Index {index} could not be parsed.", ex);
-                }
-            }
-
-            Indices = indices.ToArray();
+            return name;
         }
 
-        /// <exception cref="ArgumentNullException"></exception>
-        /// <exception cref="ApiParserInternalException"></exception>
         /// <exception cref="QueryParsingException"></exception>
-        /// <exception cref="QueryNotSupportedException"></exception>
-        /// <exception cref="SettingsException"></exception>
-        private void ResolveIndex(string index, ParseSettings settings, ref List<EndpointQueryIndex> indices)
+        /// <exception cref="SettingsException">When the converted value of any index is not of the type that the 
+        /// <paramref name="settings"/> IndexConverter promised.</exception>
+        private static EndpointQueryIndex[] GetIndices(string[] indices, ParseSettings settings)
         {
-            if (string.IsNullOrWhiteSpace(index))
+            List<EndpointQueryIndex> result = new List<EndpointQueryIndex>();
+            
+            foreach (string index in indices)
             {
-                throw new ArgumentNullException($"Value \"{index}\" can't be null or empty.", nameof(index));
+                if (string.IsNullOrWhiteSpace(index))
+                {
+                    throw new QueryParsingException($"Unable to parse {nameof(index)} {index} to {typeof(EndpointQueryIndex)}. " +
+                        $"Index contents are invalid.");
+                }
+
+                result.Add(EndpointQueryIndex.FromString(index, settings));
             }
 
-            EndpointQueryIndex Index;
+            return result.ToArray();
+        }
 
-            try
+        /// <inheritdoc/>
+        public override string ToString()
+        {
+            string result = EndpointName;
+
+            if (Enumerate)
             {
-                Index = new EndpointQueryIndex(index, settings);
-            }
-            catch (ArgumentNullException ex)
-            {
-                throw new ApiParserInternalException(ex);
-            }
-            catch (QueryParsingException ex)
-            {
-                throw new QueryParsingException($"Index of query part {Id} could not be parsed.", ex);
-            }
-            catch (ApiParserInternalException ex)
-            {
-                throw new ApiParserInternalException(ex);
-            }
-            catch (QueryNotSupportedException ex)
-            {
-                throw new QueryNotSupportedException($"Index is not supported.", ex);
-            }
-            catch (SettingsException ex)
-            {
-                throw new SettingsException($"Index could not be parsed.", ex);
+                result += Settings.IndexOpen;
+
+                result += string.Join($"{Settings.IndexClose}{Settings.IndexOpen}", Indices.Select(index => index.ToString()));
+
+                result += Settings.IndexClose;
             }
 
-            indices.Add(Index);
+            return result;
         }
     }
 }
