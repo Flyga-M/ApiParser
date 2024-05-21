@@ -86,22 +86,16 @@
     <Compile Include="V2\ApiManager.cs" />
     <Compile Include="V2\EndpointManager.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="V2\Endpoint\Endpoint.cs" />
-    <Compile Include="V2\Endpoint\EndpointPart.cs" />
     <Compile Include="V2\Endpoint\EndpointQuery.cs" />
     <Compile Include="V2\Endpoint\EndpointQueryPart.cs" />
     <Compile Include="V2\Endpoint\EndpointQueryIndex.cs" />
-    <Compile Include="V2\Endpoint\_Builder\EndpointBuilder.cs" />
-    <Compile Include="V2\Endpoint\_Builder\EndpointPartBuilder.cs" />
     <Compile Include="V2\Endpoint\_Extensions\TypeExtensions.cs" />
     <Compile Include="V2\ProcessedIndexData.cs" />
     <Compile Include="V2\ProcessedQueryData.cs" />
     <Compile Include="V2\Settings\Default\QueryVariableResolver.cs" />
     <Compile Include="V2\Settings\_Interface\IQueryVariableResolver.cs" />
-    <Compile Include="V2\Endpoint\_Type\ClientType.cs" />
     <Compile Include="V2\Settings\ApiManagerSettings.cs" />
     <Compile Include="V2\Settings\Default\Constants.cs" />
-    <Compile Include="V2\Settings\Default\Endpoints.cs" />
     <Compile Include="V2\Settings\Default\GuidIndexConverter.cs" />
     <Compile Include="V2\Settings\Default\IntIndexConverter.cs" />
     <Compile Include="V2\Settings\Default\StringIndexConverter.cs" />
@@ -129,8 +123,6 @@
     <None Include="app.config" />
     <None Include="packages.config" />
   </ItemGroup>
-  <ItemGroup>
-    <Folder Include="V2\Endpoint\_Interface\" />
-  </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

@@ -79,26 +79,6 @@ namespace ApiParser.V2.Endpoint
             return new EndpointQuery(queryParts, settings);
         }
 
-        /// <exception cref="QueryNotSupportedException"></exception>
-        /// <exception cref="ArgumentNullException"></exception>
-        internal EndpointQuery GetSubQuery(Endpoint endpoint)
-        {
-            if (endpoint == null)
-            {
-                throw new ArgumentNullException(nameof(endpoint));
-            }
-
-            if (!endpoint.SupportsQuery(this))
-            {
-                throw new QueryNotSupportedException($"The given endpoint {endpoint.Name} does not support this query " +
-                    $"{Query}.");
-            }
-
-            EndpointQueryPart[] subQueryParts = QueryParts.Skip(endpoint.Parts.Length - 1).ToArray();
-
-            return new EndpointQuery(subQueryParts, Settings);
-        }
-
         /// <inheritdoc/>
         public override string ToString()
         {
