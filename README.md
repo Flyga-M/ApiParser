@@ -61,6 +61,7 @@ if (queryResult is Gw2Sharp.WebApi.V2.Models.Account accountData)
 }
 ```
 **Result**
+
 The result is a `Gw2Sharp.WebApi.V2.Models.Account` object. For reference see
  the [Gw2Sharp implementation](https://github.com/Archomeda/Gw2Sharp/blob/master/Gw2Sharp/WebApi/V2/Models/Account/Account.cs).
 
@@ -96,6 +97,7 @@ The underlying API response might look a little bit like this[^1]
 }
 ```
 **Exceptions**
+
 This line might throw some exceptions
 ```csharp
 var queryResult = await apiManager.ResolveQuery(query);
@@ -124,6 +126,7 @@ if (queryResult is Gw2Sharp.WebApi.V2.Models.AccountMaterial materialData)
 }
 ```
 **Result**
+
 The result is a `Gw2Sharp.WebApi.V2.Models.AccountMaterial` object. For reference see
  the [Gw2Sharp implementation](https://github.com/Archomeda/Gw2Sharp/blob/master/Gw2Sharp/WebApi/V2/Models/Account/AccountMaterial.cs).
 
@@ -137,6 +140,7 @@ The underlying API response might look a little bit like this[^2]
 }
 ```
 **Exceptions**
+
 This line might throw some exceptions
 ```csharp
 var queryResult = await apiManager.ResolveQuery(query);
@@ -165,6 +169,7 @@ if (queryResult is System.DateTimeOffset)
 }
 ```
 **Result**
+
 The result is a `System.DateTimeOffset` object. For reference see
  the [Microsoft Documentation](https://learn.microsoft.com/en-us/dotnet/api/system.datetimeoffset?view=netframework-4.8).
 
@@ -178,6 +183,7 @@ The underlying API response might look a little bit like this[^3]
 }
 ```
 **Exceptions**
+
 This line might throw some exceptions
 ```csharp
 var queryResult = await apiManager.ResolveQuery(query);
