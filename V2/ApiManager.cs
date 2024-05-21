@@ -52,8 +52,6 @@ namespace ApiParser.V2
 
             ProcessedQueryData validCandidate = queryData.LastOrDefault();
 
-            Console.WriteLine($"Valid Candidate: {validCandidate}");
-
             if (validCandidate == null)
             {
                 throw new QueryResolveException($"Unable to resolve query {query}, because it can't be successfully " +
