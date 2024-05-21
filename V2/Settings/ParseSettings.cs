@@ -88,7 +88,7 @@ namespace ApiParser.V2.Settings
         /// <param name="indexOpen"></param>
         /// <param name="indexSeparator"></param>
         /// <param name="endpointSeparator"></param>
-        /// <exception cref="SettingsException"></exception>
+        /// <exception cref="SettingsException">If any of the parameters are in conflict with each other.</exception>
         public ParseSettings(IIndexConverter[] indexConverters = null, string indexVariableIdentifier = null,
             string indexOptionalIdentifier = null, char? indexClose = null, char? indexOpen = null, char? indexSeparator = null,
             char? endpointSeparator = null)
@@ -358,9 +358,11 @@ namespace ApiParser.V2.Settings
         /// <param name="types"></param>
         /// <param name="isOptional"></param>
         /// <returns>The combined identifier for the given <paramref name="types"/>.</returns>
-        /// <exception cref="ArgumentNullException"></exception>
-        /// <exception cref="ArgumentException"></exception>
-        /// <exception cref="SettingsException"></exception>
+        /// <exception cref="ArgumentNullException">If <paramref name="types"/> is null.</exception>
+        /// <exception cref="ArgumentException">If <paramref name="types"/> is empty.</exception>
+        /// <exception cref="SettingsException">If any of the <paramref name="types"/> is supported by the 
+        /// <see cref="IndexConverters"/>, but the <see cref="IIndexConverter"/> does not supply a valid 
+        /// index identifier.</exception>
         public string GetCombinedIdentifier(Type[] types, bool isOptional = false)
         {
             if (types == null)
@@ -402,8 +404,10 @@ namespace ApiParser.V2.Settings
         /// <param name="type"></param>
         /// <returns>The identifier for the given <paramref name="type"/>, or <see langword="null"/>, 
         /// if none is found.</returns>
-        /// <exception cref="ArgumentNullException"></exception>
-        /// <exception cref="SettingsException"></exception>
+        /// <exception cref="ArgumentNullException">If <paramref name="type"/> is null.</exception>
+        /// <exception cref="SettingsException">If the <paramref name="type"/> is supported by the <see cref="IndexConverters"/> 
+        /// and therefore should not return null, but the <see cref="IIndexConverter"/> does not supply a valid 
+        /// index identifier.</exception>
         public string GetIdentifier(Type type)
         {
             if (type == null)

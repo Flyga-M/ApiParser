@@ -5,20 +5,40 @@ using System.Linq;
 
 namespace ApiParser.V2.Endpoint
 {
+    /// <summary>
+    /// A part of a <see cref="EndpointQuery"/>.
+    /// </summary>
     public class EndpointQueryPart
     {
+        /// <summary>
+        /// Determines how the <see cref="EndpointQueryPart"/> is parsed either to or from a string.
+        /// </summary>
         public ParseSettings Settings { get; }
 
+        /// <summary>
+        /// The name of the endpoint part that the <see cref="EndpointQueryPart"/> refers to. Needs to follow the 
+        /// naming conventions set by <see cref="Gw2Sharp"/>.
+        /// </summary>
         public string EndpointName { get; }
 
+        /// <summary>
+        /// Determines whether the <see cref="EndpointQueryPart"/> contains any indices.
+        /// </summary>
         public bool Enumerate => Indices?.Any() ?? false;
 
+        /// <summary>
+        /// The <see cref="EndpointQueryIndex">EndpointQueryIndices</see> that are used to access sub endpoints or data of the 
+        /// <see cref="EndpointQueryPart"/>. Will be empty, if <see cref="Enumerate"/> is <see langword="true"/>.
+        /// </summary>
         public EndpointQueryIndex[] Indices { get; }
 
+        /// <summary>
+        /// Determines whether at least one of the <see cref="Indices"/> contains a variable.
+        /// </summary>
         public bool ContainsVariable => Indices?.Any(index => index.IsVariable) ?? false;
 
-        /// <exception cref="ArgumentNullException"></exception>
-        /// <exception cref="ArgumentException"></exception>
+        /// <exception cref="ArgumentNullException">If <paramref name="endpointName"/> is null.</exception>
+        /// <exception cref="ArgumentException">If <paramref name="indices"/> contains any element that is null.</exception>
         public EndpointQueryPart(string endpointName, IEnumerable<EndpointQueryIndex> indices, ParseSettings settings)
         {
             if (endpointName == null)
@@ -46,8 +66,11 @@ namespace ApiParser.V2.Endpoint
             Settings = settings;
         }
 
-        /// <exception cref="ArgumentNullException"></exception>
-        /// <exception cref="ArgumentException"></exception>
+        /// <summary>
+        /// Parses an <see cref="EndpointQueryPart"/> from the given <paramref name="id"/>.
+        /// </summary>
+        /// <exception cref="ArgumentNullException">If <paramref name="id"/> is null.</exception>
+        /// <exception cref="ArgumentException">If <paramref name="id"/> is empty or whitespace.</exception>
         /// <exception cref="QueryParsingException">When the given <paramref name="id"/> can't be parsed 
         /// correctly.</exception>
         /// <exception cref="SettingsException">When the converted value of any index is not of the type that the 

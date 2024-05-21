@@ -13,16 +13,19 @@ using System.Threading.Tasks;
 
 namespace ApiParser.V2
 {
+    /// <summary>
+    /// Manages the cache, updates and query for an endpoint.
+    /// </summary>
     public class EndpointManager
     {
-        private IGw2WebApiV2Client _apiClient;
-        private IEndpointClient _client;
-        private EndpointQuery _path;
+        private readonly IGw2WebApiV2Client _apiClient;
+        private readonly IEndpointClient _client;
+        private readonly EndpointQuery _path;
 
-        protected object _endpointData;
+        private object _endpointData;
         
         /// <summary>
-        /// How much milliseconds must pass, until the data of the <see cref="EndpointManager"/> can be refreshed.
+        /// How much milliseconds have to pass, until the data of the <see cref="EndpointManager"/> can be refreshed.
         /// </summary>
         public double Cooldown { get; }
 
@@ -40,7 +43,7 @@ namespace ApiParser.V2
 
         /// <summary>
         /// Determines whether more time has elapsed since the <see cref="LastAccess"/>, than the 
-        /// <see cref="Cooldown"/>.
+        /// <see cref="Cooldown"/>. Also <see langword="true"/>, if the current data is <see langword="null"/>.
         /// </summary>
         public bool CanRefresh
         {
@@ -55,8 +58,11 @@ namespace ApiParser.V2
         /// </summary>
         public DateTime LastAccess { get; private set; } = DateTime.MinValue;
 
-        /// <exception cref="ArgumentNullException"></exception>
-        /// <exception cref="ArgumentOutOfRangeException"></exception>
+        /// <exception cref="ArgumentNullException">If either <paramref name="apiClient"/>, <paramref name="endpointClient"/> 
+        /// or <paramref name="path"/> is null.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">If <paramref name="cooldown"/> is less than zero.</exception>
+        /// <exception cref="EndpointException">If the <paramref name="endpointClient"/> is neither all expandable nor 
+        /// has blob data.</exception>
         public EndpointManager(IGw2WebApiV2Client apiClient, IEndpointClient endpointClient, EndpointQuery path, double cooldown)
         {
             if (apiClient == null)
@@ -91,12 +97,18 @@ namespace ApiParser.V2
             Cooldown = cooldown;
         }
 
-        /// <exception cref="QueryNotSupportedException"></exception>
-        /// <exception cref="EndpointRequestException"></exception>
-        /// <exception cref="QueryResolveException"></exception>
-        /// <exception cref="QueryParsingException"></exception>
-        /// <exception cref="ApiParserInternalException"></exception>
-        /// <exception cref="SettingsException"></exception>
+        /// <exception cref="QueryNotSupportedException">If the <paramref name="queryData"/> path is not the same as 
+        /// <see cref="_path"/>.</exception>
+        /// <exception cref="EndpointRequestException">If the api responds with an error and the error is not recoverable 
+        /// via the <see cref="ResolveMode"/> of the <paramref name="settings"/>.</exception>
+        /// <exception cref="QueryResolveException">If the <paramref name="queryData"/> can't be resolved correctly.</exception>
+        /// <exception cref="QueryParsingException">If the <paramref name="queryData"/> contains a variable and the 
+        /// resolved variable can't be parsed correctly.</exception>
+        /// <exception cref="ApiParserInternalException">If there is an error with the internal logic of the library.</exception>
+        /// <exception cref="SettingsException">If the <paramref name="queryData"/> contains at least one variable, but the 
+        /// VariableResolver of the <paramref name="settings"/> is null, or if the converted value of 
+        /// the resolved variable is not of the type that the <paramref name="settings"/> IndexConverter 
+        /// promised.</exception>
         public async Task<object> ResolveQuery(ProcessedQueryData queryData, QuerySettings settings)
         {
             if (queryData.Path.ToString() != _path.ToString())
@@ -107,8 +119,8 @@ namespace ApiParser.V2
 
             if (queryData.ContainsVariable && settings.VariableResolver == null)
             {
-                throw new QueryNotSupportedException($"Unable to resolve query {queryData}. QuerySettings don't contain any " +
-                    $"variable resolver.");
+                throw new SettingsException($"Unable to resolve query {queryData}, because it contains at least one " +
+                    $"variable, but the variable resolver in the {nameof(settings)} is null.");
             }
 
             try
@@ -297,7 +309,6 @@ namespace ApiParser.V2
         /// Might return null, if <see cref="ResolveMode.RetryOrUsePrevious"/> or <see cref="ResolveMode.UsePrevious"/> is 
         /// selected.
         /// </summary>
-        /// <param name="endpointClient"></param>
         /// <param name="settings"></param>
         /// <returns></returns>
         /// <exception cref="InvalidOperationException"></exception>
@@ -321,7 +332,6 @@ namespace ApiParser.V2
         /// Might return null, if <see cref="ResolveMode.RetryOrUsePrevious"/> or <see cref="ResolveMode.UsePrevious"/> is 
         /// selected.
         /// </summary>
-        /// <param name="endpointClient"></param>
         /// <param name="settings"></param>
         /// <returns></returns>
         /// <exception cref="InvalidOperationException"></exception>
@@ -345,7 +355,6 @@ namespace ApiParser.V2
         /// Might return null, if <see cref="ResolveMode.RetryOrUsePrevious"/> or <see cref="ResolveMode.UsePrevious"/> is 
         /// selected.
         /// </summary>
-        /// <param name="endpointClient"></param>
         /// <param name="methodName"></param>
         /// <param name="parameters"></param>
         /// <param name="settings"></param>

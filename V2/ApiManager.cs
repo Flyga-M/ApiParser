@@ -50,6 +50,11 @@ namespace ApiParser.V2
         /// <exception cref="QueryResolveException">If the <paramref name="query"/> can't be resolved correctly.</exception>
         /// <exception cref="QueryParsingException">If the <paramref name="query"/> contains a variable and the 
         /// resolved variable can't be parsed correctly.</exception>
+        /// <exception cref="QueryNotSupportedException">If the endpoint that the <paramref name="query"/> targets is neither 
+        /// all expandable nor has blob data.</exception>
+        /// <exception cref="ApiParserInternalException">If there is an error with the internal logic of the library.</exception>
+        /// <exception cref="EndpointRequestException">If the api responds with an error and the error is not recoverable 
+        /// via the <see cref="ResolveMode"/> of the <paramref name="settings"/>.</exception>
         public async Task<object> ResolveQuery(EndpointQuery query, QuerySettings? settings = null)
         {
             if (query == null)
@@ -80,10 +85,28 @@ namespace ApiParser.V2
 
             if (!_endpointsByPath.ContainsKey(validCandidate.Path.ToString()))
             {
-                _endpointsByPath[validCandidate.Path.ToString()] = new EndpointManager(_client, validCandidate.Client, validCandidate.Path, Settings.Cooldown);
+                try
+                {
+                    _endpointsByPath[validCandidate.Path.ToString()] = new EndpointManager(_client, validCandidate.Client, validCandidate.Path, Settings.Cooldown);
+                }
+                catch (EndpointException ex)
+                {
+                    throw new QueryNotSupportedException($"The query {query} is not supported.", ex);
+                }
             }
 
-            return await _endpointsByPath[validCandidate.Path.ToString()].ResolveQuery(validCandidate, settings.Value);
+            object result;
+
+            try
+            {
+                result = await _endpointsByPath[validCandidate.Path.ToString()].ResolveQuery(validCandidate, settings.Value);
+            }
+            catch (QueryNotSupportedException ex)
+            {
+                throw new ApiParserInternalException(ex);
+            }
+
+            return result;
         }
 
         // this is currently built on the assumption, that no attribute from an api response has the same name as a
