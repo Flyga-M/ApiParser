@@ -52,6 +52,8 @@ namespace ApiParser.V2
 
             ProcessedQueryData validCandidate = queryData.LastOrDefault();
 
+            Console.WriteLine($"Valid Candidate: {validCandidate}");
+
             if (validCandidate == null)
             {
                 throw new QueryResolveException($"Unable to resolve query {query}, because it can't be successfully " +
@@ -72,7 +74,7 @@ namespace ApiParser.V2
         // This may change in the future (or may already be the case and i overlooked it), hence why we're keeping a list 
         // of all valid endpoint from the query, so it's easier to adapt to that case in the future
 
-        // This is not ideal, because in the case of a wrong query, it would have to update all the constructed 
+        // This is not ideal, because in the case of a faulty query, it would have to update all the constructed 
         // endpoints, to see if there is a match. Hence why this is not implemented preemptively.
 
         /// <exception cref="QueryResolveException"></exception>
@@ -122,8 +124,6 @@ namespace ApiParser.V2
                     break;
                 }
 
-                // TODO: remove indices if neccessary
-
                 traversedParts.Add(part);
                 remainingParts.RemoveAt(0);
 
@@ -139,7 +139,20 @@ namespace ApiParser.V2
                 if (part.Enumerate)
                 {
                     // don't catch anything, so it can bubble up
-                    (resolved, remainingIndices) = await ResolveIndices(resolved, part.Indices, settings);
+                    ProcessedIndexData indexData = await ResolveIndices(resolved, part.Indices, settings);
+
+                    resolved = indexData.Resolved;
+                    remainingIndices = indexData.RemainingIndices;
+
+                    EndpointQueryPart currentPart = traversedParts.Last();
+                    
+                    if (remainingIndices.Any()) // if not all indices are traversed, remove the remaining from the current part
+                    {
+                        currentPart = new EndpointQueryPart(currentPart.EndpointName, indexData.TraversedIndices, currentPart.Settings);
+                    }
+
+                    traversedParts.RemoveAt(traversedParts.Count - 1);
+                    traversedParts.Add(currentPart);
                 }
 
                 if (resolved == null)
@@ -158,6 +171,14 @@ namespace ApiParser.V2
                     }
                     result.Add(new ProcessedQueryData(endpointClient, path, subQuery, remainingIndices));
                 }
+
+                // if there are remaining indices, this path cannot continue to be traversed
+                // else this might lead to issues where X[1][2]["abc"].Y.Z will be resolved as
+                // X[1].Y.Z with remainingIndices.Count = 0 if X[1][2] can not be resolved
+                if (remainingIndices.Any())
+                {
+                    break;
+                }
             }
 
             return result.ToArray();
@@ -167,10 +188,11 @@ namespace ApiParser.V2
         /// <exception cref="QueryParsingException"></exception>
         /// <exception cref="SettingsException">When the converted value of a variable is not of the type that the 
         /// <see cref="ParseSettings"/> IndexConverter of the <paramref name="indices"/> promised.</exception>
-        private async Task<(object resolved, EndpointQueryIndex[] rest)> ResolveIndices(object @object, EndpointQueryIndex[] indices, QuerySettings settings)
+        private async Task<ProcessedIndexData> ResolveIndices(object @object, EndpointQueryIndex[] indices, QuerySettings settings)
         {
             object resolved = @object;
-            List<EndpointQueryIndex> rest = new List<EndpointQueryIndex>(indices);
+            List<EndpointQueryIndex> traversedIndices = new List<EndpointQueryIndex>();
+            List<EndpointQueryIndex> remainingIndices = new List<EndpointQueryIndex>(indices);
 
             foreach (EndpointQueryIndex index in indices)
             {
@@ -192,10 +214,11 @@ namespace ApiParser.V2
 
                 if (indexer == null) // not directly enumerable with the given type
                 {
-                    return (resolved, rest.ToArray());
+                    return new ProcessedIndexData(resolved, traversedIndices, remainingIndices);
                 }
 
-                rest.RemoveAt(0);
+                traversedIndices.Add(index);
+                remainingIndices.RemoveAt(0);
 
                 object value;
 
@@ -218,7 +241,7 @@ namespace ApiParser.V2
                 resolved = value;
             }
 
-            return (resolved, rest.ToArray());
+            return new ProcessedIndexData(resolved, traversedIndices, remainingIndices);
         }
 
     }
