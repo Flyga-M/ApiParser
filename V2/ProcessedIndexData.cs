@@ -5,12 +5,24 @@ using System.Linq;
 
 namespace ApiParser.V2
 {
+    /// <summary>
+    /// Contains data of processed indices.
+    /// </summary>
     public class ProcessedIndexData
     {
+        /// <summary>
+        /// The object, that was resolved via the <see cref="TraversedIndices"/>.
+        /// </summary>
         public readonly object Resolved;
         
+        /// <summary>
+        /// The indices that were traversed, to get the <see cref="Resolved"/> object.
+        /// </summary>
         public readonly EndpointQueryIndex[] TraversedIndices;
 
+        /// <summary>
+        /// The indices that can't be resolved directly on the <see cref="Resolved"/> object.
+        /// </summary>
         public readonly EndpointQueryIndex[] RemainingIndices;
 
         /// <exception cref="ArgumentNullException">If <paramref name="resolved"/> is null.</exception>

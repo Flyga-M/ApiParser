@@ -11,7 +11,7 @@ namespace ApiParser
     {
         /// <summary>
         /// Determines whether an <see cref="Exception"/> thrown by the <see cref="IGw2WebApiClient"/> 
-        /// is retryable.
+        /// is recoverable.
         /// </summary>
         /// <param name="exception"></param>
         /// <returns>True, if the <paramref name="exception"/> is either a 

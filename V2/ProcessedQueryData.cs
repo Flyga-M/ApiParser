@@ -6,14 +6,29 @@ using System.Linq;
 
 namespace ApiParser.V2
 {
+    /// <summary>
+    /// Contains data of a processed <see cref="EndpointQuery"/>.
+    /// </summary>
     public class ProcessedQueryData
     {
+        /// <summary>
+        /// The resolved <see cref="IEndpointClient"/>.
+        /// </summary>
         public readonly IEndpointClient Client;
 
+        /// <summary>
+        /// Contains the <see cref="EndpointQueryPart"/>s that were traversed, to get the <see cref="Client"/>.
+        /// </summary>
         public readonly EndpointQuery Path;
 
+        /// <summary>
+        /// Contains the <see cref="EndpointQueryPart"/>s that can't be resolved directly on the <see cref="Client"/>.
+        /// </summary>
         public readonly EndpointQuery SubQuery; // may be null
 
+        /// <summary>
+        /// The indices that can't be resolved directly on the <see cref="Client"/> object.
+        /// </summary>
         public readonly EndpointQueryIndex[] RemainingIndices;
 
         /// <summary>
@@ -32,6 +47,8 @@ namespace ApiParser.V2
             }
         }
 
+        /// <exception cref="ArgumentNullException">If either <paramref name="client"/> or <paramref name="path"/> 
+        /// is null.</exception>
         public ProcessedQueryData(IEndpointClient client, EndpointQuery path, EndpointQuery subQuery, IEnumerable<EndpointQueryIndex> remainingIndices)
         {
             if (client == null)

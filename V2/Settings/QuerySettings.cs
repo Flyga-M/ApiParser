@@ -5,6 +5,9 @@
     /// </summary>
     public struct QuerySettings
     {
+        /// <summary>
+        /// A static reference to the default <see cref="QuerySettings"/>.
+        /// </summary>
         public static readonly QuerySettings Default = new QuerySettings(null, null, null, null);
         
         /// <summary>
@@ -14,15 +17,13 @@
 
         /// <summary>
         /// The amount of milliseconds until a retry attempt is made if <see cref="ResolveMode"/> 
-        /// is set to <see cref="ResolveMode.Retry"/>, <see cref="ResolveMode.RetryOrUsePrevious"/> or 
-        /// <see cref="ResolveMode.UsePreviousOrRetry"/>.
+        /// is set to <see cref="ResolveMode.Retry"/>, <see cref="ResolveMode.RetryOrUsePrevious"/>.
         /// </summary>
         public int RetryDelay;
 
         /// <summary>
         /// The amount of times a retry attempt is made if <see cref="ResolveMode"/> 
-        /// is set to <see cref="ResolveMode.Retry"/>, <see cref="ResolveMode.RetryOrUsePrevious"/> or 
-        /// <see cref="ResolveMode.UsePreviousOrRetry"/>.
+        /// is set to <see cref="ResolveMode.Retry"/>, <see cref="ResolveMode.RetryOrUsePrevious"/>.
         /// </summary>
         public int RetryAmount;
 
@@ -32,6 +33,13 @@
         /// </summary>
         public IQueryVariableResolver VariableResolver;
 
+        /// <summary>
+        /// Will use default values, for the parameters that are set to <see langword="null"/>.
+        /// </summary>
+        /// <param name="resolve"></param>
+        /// <param name="retryDelay"></param>
+        /// <param name="retryAmount"></param>
+        /// <param name="variableResolver"></param>
         public QuerySettings(ResolveMode? resolve = null, int? retryDelay = null, int? retryAmount = null, IQueryVariableResolver variableResolver = null)
         {
             if (!resolve.HasValue)
@@ -41,7 +49,7 @@
 
             if (!retryDelay.HasValue)
             {
-                retryDelay = 1000;
+                retryDelay = 5000;
             }
 
             if (!retryAmount.HasValue)

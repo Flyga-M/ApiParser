@@ -3,8 +3,19 @@ using System.Linq;
 
 namespace ApiParser
 {
+    /// <summary>
+    /// Provides utility functions for brackets.
+    /// </summary>
     public static class BracketUtil
     {
+        /// <summary>
+        /// Determines whether the brackets in the <paramref name="string"/> are well formed.
+        /// </summary>
+        /// <param name="string"></param>
+        /// <param name="open"></param>
+        /// <param name="close"></param>
+        /// <returns><see langword="true"/>, if the <paramref name="string"/> has the same amount of <paramref name="open"/> and 
+        /// <paramref name="close"/> brackets and they are well formed. Otherwise <see langword="false"/>.</returns>
         public static bool IsWellFormed(string @string, char open, char close)
         {
             int openBrackets = 0;
@@ -41,8 +52,8 @@ namespace ApiParser
         /// <param name="open"></param>
         /// <param name="close"></param>
         /// <param name="result"></param>
-        /// <returns>True, if the <paramref name="string"/> is well formed and contains at least one 
-        /// <paramref name="open"/>ing bracket. Otherwise false.</returns>
+        /// <returns><see langword="true"/>, if the <paramref name="string"/> is well formed and contains at least one 
+        /// <paramref name="open"/>ing bracket. Otherwise <see langword="false"/>.</returns>
         public static bool TryGetInnerContent(string @string, char open, char close, out string result)
         {
             result = null;
@@ -71,8 +82,8 @@ namespace ApiParser
         /// <param name="open"></param>
         /// <param name="close"></param>
         /// <param name="result"></param>
-        /// <returns>True, if the <paramref name="string"/> is well formed and contains at least one 
-        /// <paramref name="open"/>ing bracket. Otherwise false.</returns>
+        /// <returns><see langword="true"/>, if the <paramref name="string"/> is well formed and contains at least one 
+        /// <paramref name="open"/>ing bracket. Otherwise <see langword="false"/>.</returns>
         public static bool TryGetInnerContents(string @string, char open, char close, out string[] result)
         {
             List<string> contents = new List<string>();

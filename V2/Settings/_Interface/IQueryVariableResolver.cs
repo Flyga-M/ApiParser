@@ -1,4 +1,5 @@
 ﻿using System.Threading.Tasks;
+using ApiParser.V2.Endpoint;
 
 namespace ApiParser.V2.Settings
 {

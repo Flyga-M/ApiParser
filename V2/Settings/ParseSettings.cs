@@ -44,7 +44,7 @@ namespace ApiParser.V2.Settings
         /// </summary>
         /// <remarks>
         /// May not contain the <see cref="IndexSeparator"/>, <see cref="IndexOpen"/>, <see cref="IndexClose"/> or 
-        /// <see cref="EndpointSeparator"/>. May not be the same as any <see cref="IIndexConverter.IndexIdentifier"/>.
+        /// <see cref="EndpointSeparator"/>. May not be the same as any of the <see cref="IIndexConverter.IndexIdentifiers"/>.
         /// </remarks>
         public string IndexOptionalIdentifier;
 

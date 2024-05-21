@@ -5,72 +5,36 @@ using System.Threading.Tasks;
 
 namespace ApiParser
 {
+    /// <summary>
+    /// Provides utility functions for reflection.
+    /// </summary>
     public static class ReflectionUtil
     {
-        /// <exception cref="ArgumentNullException"></exception>
-        /// <exception cref="InvalidOperationException"></exception>
-        public static bool IsGenericType(object @object, Type genericType)
-        {
-            if (@object == null)
-            {
-                throw new ArgumentNullException(nameof(@object));
-            }
-
-            if (genericType == null)
-            {
-                throw new ArgumentNullException(nameof(@genericType));
-            }
-
-            Type actualType;
-
-            try
-            {
-                actualType = @object.GetType().GetGenericTypeDefinition();
-            }
-            catch (InvalidOperationException ex)
-            {
-                throw new InvalidOperationException($"Given object of type {@object.GetType()} is not generic.", ex);
-            }
-            catch (NotSupportedException ex)
-            {
-                throw new InvalidOperationException($"Unable to determine whether the object of the given type " +
-                    $"{@object.GetType()} is of generic type {genericType}.", ex);
-            }
-
-            return actualType == genericType;
-        }
-        
-        /// <exception cref="ArgumentNullException"></exception>
-        /// <exception cref="InvalidOperationException"></exception>
-        public static Type[] GetGenericArguments(object @object)
-        {
-            if (@object == null)
-            {
-                throw new ArgumentNullException(nameof(@object));
-            }
-
-            Type[] result;
-
-            try
-            {
-                result = @object.GetType().GetGenericArguments();
-            }
-            catch (NotSupportedException ex)
-            {
-                throw new InvalidOperationException($"Unable to retrieve generic arguments for object of " +
-                    $"type {@object.GetType()}.", ex);
-            }
-            
-            return result;
-        }
-
         /// <summary>
         /// Does not catch potential exceptions from the async method.
         /// </summary>
-        /// <exception cref="ArgumentNullException"></exception>
-        /// <exception cref="InvalidOperationException"></exception>
-        /// <exception cref="ApiParserInternalException"></exception>
-        /// <exception cref="ArgumentException"></exception>
+
+
+        /// <summary>
+        /// Invokes the async method with the <paramref name="methodName"/> on the <paramref name="object"/> 
+        /// with the given <paramref name="parameters"/> and returns it's result. Does not catch any potential 
+        /// <see cref="Exception"/>s from the async method.
+        /// </summary>
+        /// <typeparam name="TResult"></typeparam>
+        /// <param name="object"></param>
+        /// <param name="methodName"></param>
+        /// <param name="parameters"></param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentNullException">If either <paramref name="object"/>, <paramref name="methodName"/> or 
+        /// <paramref name="parameters"/> is null.</exception>
+        /// <exception cref="InvalidOperationException">If the <paramref name="methodName"/> is ambigious, or the method does 
+        /// not exist. Also if the invoking of the method throws a <see cref="TargetException"/>, 
+        /// <see cref="TargetInvocationException"/>, <see cref="MethodAccessException"/>, <see cref="InvalidOperationException"/> 
+        /// or a <see cref="NotSupportedException"/>. Also, if the result of the method is not of the same <see cref="Type"/> 
+        /// as <typeparamref name="TResult"/>.</exception>
+        /// <exception cref="ApiParserInternalException">If there is an error with the internal logic of the library.</exception>
+        /// <exception cref="ArgumentException">If <paramref name="methodName"/> is empty or whitespace. Also if 
+        /// <paramref name="parameters"/> is multi-dimensional.</exception>
         public static async Task<TResult> InvokeAsyncMethodAsync<TResult>(object @object, string methodName, object[] parameters)
         {
             if (@object == null)
@@ -78,9 +42,14 @@ namespace ApiParser
                 throw new ArgumentNullException(nameof(@object));
             }
 
-            if (string.IsNullOrWhiteSpace(methodName))
+            if (methodName == null)
             {
                 throw new ArgumentNullException(nameof(methodName));
+            }
+
+            if (string.IsNullOrWhiteSpace(methodName))
+            {
+                throw new ArgumentException($"{nameof(methodName)} can't be empty or whitespace.", nameof(methodName));
             }
 
             if (parameters == null)
