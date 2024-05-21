@@ -107,7 +107,6 @@
     <Compile Include="_Exceptions\ApiParserException.cs" />
     <Compile Include="_Exceptions\ApiParserInternalException.cs" />
     <Compile Include="_Exceptions\EndpointException.cs" />
-    <Compile Include="_Exceptions\EndpointParsingException.cs" />
     <Compile Include="_Exceptions\EndpointRequestException.cs" />
     <Compile Include="_Exceptions\QueryException.cs" />
     <Compile Include="_Exceptions\QueryNotSupportedException.cs" />
