@@ -7,7 +7,6 @@ using ApiParser.V2.Settings;
 using System;
 using Gw2Sharp.WebApi.V2.Clients;
 using System.Reflection;
-using Gw2Sharp.WebApi;
 
 namespace ApiParser.V2
 {

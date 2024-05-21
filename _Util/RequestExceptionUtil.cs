@@ -1,7 +1,5 @@
 ﻿using Gw2Sharp.WebApi.Exceptions;
 using System;
-using System.Threading;
-using System.Threading.Tasks;
 using Gw2Sharp.WebApi;
 
 namespace ApiParser
