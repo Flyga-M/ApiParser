@@ -174,12 +174,12 @@ The result is a `System.DateTimeOffset` object. For reference see
  the [Microsoft Documentation](https://learn.microsoft.com/en-us/dotnet/api/system.datetimeoffset?view=netframework-4.8).
 
 The underlying API response might look a little bit like this[^3]
-[^3]: Copied directly from the [GW2 Wiki](https://wiki.guildwars2.com/wiki/API:2/guild/:id/members)
+[^3]: Copied directly (after adding quotation marks) from the [GW2 Wiki](https://wiki.guildwars2.com/wiki/API:2/guild/:id/members)
 ```json
 {
-    name: "Lawton Campbell.9413",
-    rank: "Leader",
-    joined: "2015-07-22T06:18:35.000Z"
+    "name": "Lawton Campbell.9413",
+    "rank": "Leader",
+    "joined": "2015-07-22T06:18:35.000Z"
 }
 ```
 **Exceptions**
