@@ -10,14 +10,22 @@ using System.Reflection;
 
 namespace ApiParser.V2
 {
+    /// <summary>
+    /// Manages the <see cref="EndpointManager"/>s. May be used to resolve an <see cref="EndpointQuery"/> and retrieve 
+    /// data from the gw2 api.
+    /// </summary>
     public class ApiManager
     {
         private readonly IGw2WebApiV2Client _client;
 
         private readonly Dictionary<string, EndpointManager> _endpointsByPath = new Dictionary<string, EndpointManager>();
 
+        /// <summary>
+        /// Determines how the <see cref="ApiManager"/> manages the <see cref="EndpointManager"/>s.
+        /// </summary>
         public ApiManagerSettings Settings { get; }
 
+        /// <exception cref="ArgumentNullException">If <paramref name="client"/> is null.</exception>
         public ApiManager(IGw2WebApiV2Client client, ApiManagerSettings settings)
         {
             if (client == null)
@@ -28,7 +36,20 @@ namespace ApiParser.V2
             Settings = settings;
         }
 
-        // TODO: document and add exceptions
+        /// <summary>
+        /// Resolves the provided <paramref name="query"/> and retrieves the data from the gw2 api.
+        /// </summary>
+        /// <param name="query"></param>
+        /// <param name="settings">If settings is null, the default settings will be used.</param>
+        /// <returns>The retrieved data from the gw2 api.</returns>
+        /// <exception cref="ArgumentNullException">If <paramref name="query"/> is null.</exception>
+        /// <exception cref="SettingsException">If the <paramref name="query"/> contains at least one variable, but the 
+        /// VariableResolver of the <paramref name="settings"/> is null, or if the converted value of 
+        /// the resolved variable is not of the type that the <paramref name="settings"/> IndexConverter 
+        /// promised.</exception>
+        /// <exception cref="QueryResolveException">If the <paramref name="query"/> can't be resolved correctly.</exception>
+        /// <exception cref="QueryParsingException">If the <paramref name="query"/> contains a variable and the 
+        /// resolved variable can't be parsed correctly.</exception>
         public async Task<object> ResolveQuery(EndpointQuery query, QuerySettings? settings = null)
         {
             if (query == null)
@@ -43,7 +64,7 @@ namespace ApiParser.V2
 
             if (query.ContainsVariable && settings.Value.VariableResolver == null)
             {
-                throw new QueryResolveException($"Unable to resolve query {query}, because it contains at least one " +
+                throw new SettingsException($"Unable to resolve query {query}, because it contains at least one " +
                     $"variable, but the variable resolver in the {nameof(settings)} is null.");
             }
 
@@ -74,10 +95,12 @@ namespace ApiParser.V2
         // This is not ideal, because in the case of a faulty query, it would have to update all the constructed 
         // endpoints, to see if there is a match. Hence why this is not implemented preemptively.
 
-        /// <exception cref="QueryResolveException"></exception>
-        /// <exception cref="QueryParsingException"></exception>
-        /// <exception cref="SettingsException">When the converted value of a variable is not of the type that the 
-        /// <see cref="ParseSettings"/> IndexConverter of the <paramref name="query"/> promised.</exception>
+        /// <exception cref="QueryResolveException">If the <paramref name="query"/> can't be resolved correctly.</exception>
+        /// <exception cref="QueryParsingException">If the <paramref name="query"/> contains a variable and the 
+        /// resolved variable can't be parsed correctly.</exception>
+        /// <exception cref="SettingsException">If the <paramref name="query"/> contains a variable and the converted value of 
+        /// the resolved variable is not of the type that the <see cref="ParseSettings"/> IndexConverter of 
+        /// the <paramref name="query"/> promised.</exception>
         private async Task<ProcessedQueryData[]> ProcessQuery(IGw2WebApiV2Client apiClient, EndpointQuery query, QuerySettings settings)
         {
             List<ProcessedQueryData> result = new List<ProcessedQueryData>();
@@ -181,10 +204,12 @@ namespace ApiParser.V2
             return result.ToArray();
         }
 
-        /// <exception cref="QueryResolveException"></exception>
-        /// <exception cref="QueryParsingException"></exception>
-        /// <exception cref="SettingsException">When the converted value of a variable is not of the type that the 
-        /// <see cref="ParseSettings"/> IndexConverter of the <paramref name="indices"/> promised.</exception>
+        /// <exception cref="QueryResolveException">If any of the <paramref name="indices"/> can't be resolved correctly.</exception>
+        /// <exception cref="QueryParsingException">If any of the <paramref name="indices"/> contain a variable and the 
+        /// resolved variable can't be parsed correctly.</exception>
+        /// <exception cref="SettingsException">If any of the <paramref name="indices"/> contain a variable and the 
+        /// resolved variable is not of the type that the <see cref="ParseSettings"/> IndexConverter of the 
+        /// <paramref name="indices"/> promised.</exception>
         private async Task<ProcessedIndexData> ResolveIndices(object @object, EndpointQueryIndex[] indices, QuerySettings settings)
         {
             object resolved = @object;

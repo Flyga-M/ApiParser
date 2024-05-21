@@ -4,6 +4,9 @@ using System.Reflection;
 
 namespace ApiParser.V2.Endpoint
 {
+    /// <summary>
+    /// Provides extension methods for the <see cref="Type"/> class.
+    /// </summary>
     public static class TypeExtensions
     {
         // https://stackoverflow.com/a/55457150

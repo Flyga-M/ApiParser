@@ -5,7 +5,7 @@ using System.Linq;
 namespace ApiParser.V2.Settings
 {
     /// <summary>
-    /// Determines how an endpoint or query is parsed.
+    /// Determines how a query is parsed.
     /// </summary>
     public struct ParseSettings
     {

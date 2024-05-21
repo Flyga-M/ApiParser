@@ -5,20 +5,45 @@ using System.Threading.Tasks;
 
 namespace ApiParser.V2.Endpoint
 {
+    /// <summary>
+    /// An index of a <see cref="EndpointQueryPart"/> of a <see cref="EndpointQuery"/>. Used for enumerable endpoints or 
+    /// enumerable attributes of the retrieved api response. Might be a variable that may be resolved with a 
+    /// <see cref="IQueryVariableResolver"/>.
+    /// </summary>
     public class EndpointQueryIndex
     {
+        /// <summary>
+        /// Determines how the <see cref="EndpointQueryIndex"/> is parsed either to or from a string.
+        /// </summary>
         public ParseSettings Settings { get; }
 
+        /// <summary>
+        /// Determines whether the <see cref="EndpointQueryIndex"/> carries a <see cref="Variable"/> instead of 
+        /// a <see cref="Value"/>.
+        /// </summary>
         public bool IsVariable => Variable != null;
 
+        /// <summary>
+        /// The <see cref="Type"/> of the <see cref="Value"/>, or promised <see cref="Type"/> of the <see cref="Variable"/> 
+        /// if <see cref="IsVariable"/> is <see langword="true"/>.
+        /// </summary>
         public Type IndexType { get; }
 
+        /// <summary>
+        /// The string identifier of the contained variable. Will only contain a value, if <see cref="IsVariable"/> is 
+        /// <see langword="true"/>. Otherwise will be <see langword="null"/>.
+        /// </summary>
         public string Variable { get; }
 
+        /// <summary>
+        /// The index value of Type <see cref="IndexType"/>. Will only contain a value, if <see cref="IsVariable"/> is 
+        /// <see langword="false"/>. Otherwise will be <see langword="null"/>.
+        /// </summary>
         public object Value { get; }
 
-        /// <exception cref="ArgumentNullException"></exception>
-        /// <exception cref="ArgumentException"></exception>
+        /// <exception cref="ArgumentNullException">If <paramref name="value"/> is null.</exception>
+        /// <exception cref="ArgumentException">If the <see cref="Type"/> of <paramref name="value"/> can't be 
+        /// converted by the provided <paramref name="settings"/>.</exception>
         public EndpointQueryIndex(object value, ParseSettings settings)
         {
             if (value == null)
@@ -39,8 +64,10 @@ namespace ApiParser.V2.Endpoint
             Settings = settings;
         }
 
-        /// <exception cref="ArgumentNullException"></exception>
-        /// <exception cref="ArgumentException"></exception>
+        /// <exception cref="ArgumentNullException">If either <paramref name="indexType"/> or <paramref name="variable"/> 
+        /// is null.</exception>
+        /// <exception cref="ArgumentException">If <paramref name="variable"/> is empty or whitespace, or if 
+        /// the <paramref name="indexType"/> can't be converted by the provided <paramref name="settings"/>.</exception>
         public EndpointQueryIndex(Type indexType, string variable, ParseSettings settings)
         {
             if (indexType == null)
@@ -69,8 +96,11 @@ namespace ApiParser.V2.Endpoint
             Settings = settings;
         }
 
-        /// <exception cref="ArgumentNullException"></exception>
-        /// <exception cref="ArgumentException"></exception>
+        /// <summary>
+        /// Parses an <see cref="EndpointQueryIndex"/> from the given <paramref name="index"/>.
+        /// </summary>
+        /// <exception cref="ArgumentNullException">If <paramref name="index"/> is null.</exception>
+        /// <exception cref="ArgumentException">If <paramref name="index"/> is empty or whitespace.</exception>
         /// <exception cref="QueryParsingException">When the given <paramref name="index"/> can't be parsed 
         /// correctly.</exception>
         /// <exception cref="SettingsException">When the converted value is not of the type that the 
@@ -169,6 +199,8 @@ namespace ApiParser.V2.Endpoint
                 throw new QueryParsingException($"Value {valueString} could not be converted to {nameof(valueType)} {valueType}.");
             }
 
+            // TODO: this might raise problems when an IndexConverter promises a more general type, but the returned type is a subtype
+            // this is currently not really a problem, since indices are either string, int or guid. But should still be adressed.
             if (result.GetType() != valueType)
             {
                 throw new SettingsException($"IndexConverter for type {valueType} did successfully convert value " +
@@ -186,8 +218,11 @@ namespace ApiParser.V2.Endpoint
         /// <returns>A <see cref="Task"/> that represents the resolved variable, or <see langword="null"/> 
         /// if the variable can't be resolved by the <paramref name="resolver"/>.</returns>
         /// <exception cref="InvalidOperationException">If the <see cref="EndpointQueryIndex"/> is not a variable.</exception>
-        /// <exception cref="ArgumentNullException">If <paramref name="resolver"/> is <see langword="null"/>.</exception>
-        /// <inheritdoc cref="GetValue(string, Type, ParseSettings)"/>
+        /// <exception cref="ArgumentNullException">If <paramref name="resolver"/> is null.</exception>
+        /// <exception cref="QueryParsingException">When the resolved <see cref="Variable"/> can't be parsed 
+        /// correctly.</exception>
+        /// <exception cref="SettingsException">When the converted value of the resolved <see cref="Variable"/> is not 
+        /// of the type that the <see cref="Settings"/> IndexConverter promised.</exception>
         public async Task<object> ResolveVariable(IQueryVariableResolver resolver)
         {
             if (!IsVariable)
