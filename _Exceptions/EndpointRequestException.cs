@@ -1,52 +1,35 @@
 ﻿using System;
-using System.Runtime.Serialization;
+using Gw2Sharp.WebApi.Exceptions;
 
 namespace ApiParser
 {
     /// <summary>
     /// The <see cref="EndpointException"/> that is thrown when an endpoint fails to receive data from the 
-    /// api.
+    /// api. The inner exception contains the <see cref="RequestException"/> or <see cref="RequestException{TResponse}"/>.
     /// </summary>
     public class EndpointRequestException : EndpointException
     {
-        /// <inheritdoc/>
-        public EndpointRequestException()
+        /// <summary>
+        /// Determines whether the inner <see cref="RequestException"/> is recoverable.
+        /// </summary>
+        public bool Recoverable
         {
+            get
+            {
+                if (InnerException == null)
+                {
+                    return false;
+                }
 
-        }
-
-        /// <inheritdoc/>
-        public EndpointRequestException(string message)
-            : base(message)
-        {
-
-        }
-
-        /// <inheritdoc/>
-        public EndpointRequestException(string message, string endpointName)
-            : base(message, endpointName)
-        {
-
+                return RequestExceptionUtil.IsRecoverable(InnerException);
+            }
         }
 
         /// <inheritdoc/>
         public EndpointRequestException(string message, Exception inner)
             : base(message, inner)
         {
-
-        }
-
-        /// <inheritdoc/>
-        public EndpointRequestException(string message, string endpointName, Exception inner)
-            : base(message, endpointName, inner)
-        {
-
-        }
-
-        /// <inheritdoc/>
-        protected EndpointRequestException(SerializationInfo info, StreamingContext ctxt) : base(info, ctxt)
-        {
-
+            
         }
     }
 }

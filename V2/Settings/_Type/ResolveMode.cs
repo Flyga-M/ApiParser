@@ -1,24 +1,27 @@
 ﻿namespace ApiParser.V2.Settings
 {
     /// <summary>
-    /// Determines how to continue, after a retriable api error.
+    /// Determines how to continue, after a recoverable api error.
     /// </summary>
     public enum ResolveMode
     {
         /// <summary>
-        /// Just throw an exception.
+        /// Try once. If it fails, throw an exception.
         /// </summary>
         None,
         /// <summary>
-        /// Retry the same query again.
+        /// Try for x amount of times if a recoverable error occurs. Throw if the error is not recoverable 
+        /// or if all retries fail.
         /// </summary>
         Retry,
         /// <summary>
-        /// Retry the same query again. If it still fails, use the data of the previous call, even if it is null.
+        /// Try for x amount of times if a recoverable error occurs. Use the data from the previous call if all retries 
+        /// fail. Throw if the error is not recoverable or if all retries fail and the previous data is null.
         /// </summary>
         RetryOrUsePrevious,
         /// <summary>
-        /// Use the data of the previous call to the endpoint, even if it is null.
+        /// Try once. Use the data from the previous call if a recoverable error occurs. 
+        /// Throw if the error is not recoverable or the previous data is null.
         /// </summary>
         UsePrevious
     }

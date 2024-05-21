@@ -122,23 +122,13 @@ namespace ApiParser.V2
             {
                 throw new ApiParserInternalException(ex);
             }
-            catch (RequestException ex) // TODO: maybe convert earlier in lower levels.
-            {
-                throw new EndpointRequestException($"Unable to resolve query {queryData}, " +
-                    $"because the API response threw an exception.", ex);
-            }
-            catch (RequestException<ErrorObject> ex) // This is necessary, because at v1.7.4 RequestException<T> does not inherit from RequestException
-            {
-                throw new EndpointRequestException($"Unable to resolve query {queryData}, " +
-                    $"because the API response threw an exception.", ex);
-            }
 
             object endpointData = _endpointData;
 
             if (endpointData == null)
             {
-                // TODO: maybe put in lower levels, so an inner exception can be provided.
-                throw new EndpointRequestException("Endpoint data is null, after endpoint was updated.");
+                throw new ApiParserInternalException($"endpoint data is null, even after the update and no exception " +
+                    $"was thrown. QueryData: {queryData}");
             }
 
             if (queryData.RemainingIndices != null && queryData.RemainingIndices.Any())
@@ -267,7 +257,7 @@ namespace ApiParser.V2
         /// <exception cref="ApiParserInternalException"></exception>
         /// <exception cref="SettingsException"></exception>
         /// <exception cref="NotImplementedException"></exception>
-        /// <exception cref="RequestException"> All kinds of sub types.</exception>
+        /// <exception cref="EndpointRequestException"></exception>
         private async Task UpdateEndpoint(QuerySettings settings)
         {
             if (!CanRefresh)
@@ -316,7 +306,7 @@ namespace ApiParser.V2
         /// <exception cref="InvalidOperationException"></exception>
         /// <exception cref="ApiParserInternalException"></exception>
         /// <exception cref="SettingsException"></exception>
-        /// <exception cref="RequestException"> All kinds of sub types.</exception>
+        /// <exception cref="EndpointRequestException"></exception>
         private async Task<object> UpdateEndpointGetAsync(QuerySettings settings)
         {
             string methodName = "GetAsync";
@@ -340,7 +330,7 @@ namespace ApiParser.V2
         /// <exception cref="InvalidOperationException"></exception>
         /// <exception cref="ApiParserInternalException"></exception>
         /// <exception cref="SettingsException"></exception>
-        /// <exception cref="RequestException"> All kinds of sub types.</exception>
+        /// <exception cref="EndpointRequestException"></exception>
         private async Task<object> UpdateEndpointAllAsync(QuerySettings settings)
         {   
             string methodName = "AllAsync";
@@ -366,7 +356,7 @@ namespace ApiParser.V2
         /// <exception cref="ArgumentNullException"></exception>
         /// <exception cref="ApiParserInternalException"></exception>
         /// <exception cref="SettingsException"></exception>
-        /// <exception cref="RequestException"> All kinds of sub types.</exception>
+        /// <exception cref="EndpointRequestException"> All kinds of sub types.</exception>
         private async Task<object> InvokeUpdate(string methodName, object[] parameters, QuerySettings settings)
         {
             if (string.IsNullOrWhiteSpace(methodName))
@@ -388,18 +378,6 @@ namespace ApiParser.V2
             {
                 throw new ApiParserInternalException(ex);
             }
-            catch (ApiParserInternalException ex)
-            {
-                throw new ApiParserInternalException(ex);
-            }
-            catch (SettingsException ex)
-            {
-                ExceptionDispatchInfo.Capture(ex).Throw();
-            }
-            catch (RequestException ex) // rethrow request exceptions
-            {
-                ExceptionDispatchInfo.Capture(ex).Throw();
-            }
 
             return result;
         }
@@ -408,7 +386,7 @@ namespace ApiParser.V2
         /// <exception cref="ArgumentNullException"></exception>
         /// <exception cref="SettingsException"></exception>
         /// <exception cref="ApiParserInternalException"></exception>
-        /// <exception cref="RequestException"> All kinds of sub types.</exception>
+        /// <exception cref="EndpointRequestException"></exception>
         private async Task<object> HandleResolveMode(string methodName, object[] parameters, QuerySettings settings)
         {
             if (string.IsNullOrWhiteSpace(methodName))
@@ -426,8 +404,21 @@ namespace ApiParser.V2
             {
                 case ResolveMode.None:
                     {
-                        throw new SettingsException($"Unable to update endpoint {_client?.EndpointPath}, because " +
-                            $"{nameof(settings)} did not specify a {typeof(ResolveMode)}.");
+                        try
+                        {
+                            result = await RetryRecoverable(methodName, parameters, 1, 0);
+                        }
+                        catch (ArgumentNullException ex)
+                        {
+                            throw new ApiParserInternalException(ex);
+                        }
+                        catch (ArgumentException ex)
+                        {
+                            throw new ApiParserInternalException(ex);
+                        }
+                        // let EndpointRequestException bubble up.
+
+                        break;
                     }
                 case ResolveMode.Retry:
                     {
@@ -440,7 +431,7 @@ namespace ApiParser.V2
 
                         try
                         {
-                            result = await RetryRetryable(methodName, parameters, settings.RetryAmount, settings.RetryDelay);
+                            result = await RetryRecoverable(methodName, parameters, settings.RetryAmount, settings.RetryDelay);
                         }
                         catch (ArgumentNullException ex)
                         {
@@ -450,14 +441,7 @@ namespace ApiParser.V2
                         {
                             throw new ApiParserInternalException(ex);
                         }
-                        catch (ApiParserInternalException ex)
-                        {
-                            throw new ApiParserInternalException(ex);
-                        }
-                        catch (RequestException ex) // rethrow request exceptions
-                        {
-                            ExceptionDispatchInfo.Capture(ex).Throw();
-                        }
+                        // let EndpointRequestException bubble up.
 
                         break;
                     }
@@ -472,7 +456,7 @@ namespace ApiParser.V2
 
                         try
                         {
-                            result = await RetryRetryable(methodName, parameters, settings.RetryAmount, settings.RetryDelay);
+                            result = await RetryRecoverable(methodName, parameters, settings.RetryAmount, settings.RetryDelay);
                         }
                         catch (ArgumentNullException ex)
                         {
@@ -482,29 +466,28 @@ namespace ApiParser.V2
                         {
                             throw new ApiParserInternalException(ex);
                         }
-                        catch (ApiParserInternalException ex)
+                        catch (EndpointRequestException ex)
                         {
-                            throw new ApiParserInternalException(ex);
-                        }
-                        catch (RequestException)
-                        {
-                            // don't do anything, just use the previous value
+                            if (!ex.Recoverable) // bad request
+                            {
+                                ExceptionDispatchInfo.Capture(ex).Throw();
+                            }
+
+                            if (_endpointData == null) // not possible to use previous data
+                            {
+                                ExceptionDispatchInfo.Capture(ex).Throw();
+                            }
+
+                            // if the retry was recoverable, but still unsuccessfull, just use the old data
                         }
 
                         break;
                     }
                 case ResolveMode.UsePrevious:
                     {
-                        if (settings.RetryAmount < 1 || settings.RetryDelay < 0)
-                        {
-                            throw new SettingsException($"Unable to update endpoint {_client?.EndpointPath}, because " +
-                                $"{nameof(settings)} did not specify a valid {nameof(settings.RetryAmount)} or " +
-                                $"{nameof(settings.RetryDelay)}.");
-                        }
-
                         try
                         {
-                            result = await RetryRetryable(methodName, parameters, 1, 0);
+                            result = await RetryRecoverable(methodName, parameters, 1, 0);
                         }
                         catch (ArgumentNullException ex)
                         {
@@ -514,13 +497,19 @@ namespace ApiParser.V2
                         {
                             throw new ApiParserInternalException(ex);
                         }
-                        catch (ApiParserInternalException ex)
+                        catch (EndpointRequestException ex)
                         {
-                            throw new ApiParserInternalException(ex);
-                        }
-                        catch (RequestException)
-                        {
-                            // don't do anything, just use the previous value
+                            if (!ex.Recoverable) // bad request
+                            {
+                                ExceptionDispatchInfo.Capture(ex).Throw();
+                            }
+
+                            if (_endpointData == null) // not possible to use previous data
+                            {
+                                ExceptionDispatchInfo.Capture(ex).Throw();
+                            }
+
+                            // if the retry was recoverable, but still unsuccessfull, just use the old data
                         }
 
                         break;
@@ -531,14 +520,14 @@ namespace ApiParser.V2
         }
 
         /// <summary>
-        /// Will throw all flavours of <see cref="RequestException"/>, even the retryable ones, if the last 
+        /// Will throw all flavours of <see cref="EndpointRequestException"/>, even the recoverable ones, if the last 
         /// retry still fails.
         /// </summary>
         /// <exception cref="ArgumentNullException"></exception>
         /// <exception cref="ArgumentException"></exception>
         /// <exception cref="ApiParserInternalException"></exception>
-        /// <exception cref="RequestException"> All kinds of sub types.</exception>
-        private async Task<object> RetryRetryable(string methodName, object[] parameters, int amount, int delay)
+        /// <exception cref="EndpointRequestException"></exception>
+        private async Task<object> RetryRecoverable(string methodName, object[] parameters, int amount, int delay)
         {   
             if (string.IsNullOrWhiteSpace(methodName))
             {
@@ -575,11 +564,11 @@ namespace ApiParser.V2
                 {
                     throw new ApiParserInternalException(ex);
                 }
-                catch (InvalidOperationException ex) // TODO: reevaluate if this can only happen when an internal exception occurs
+                catch (InvalidOperationException ex)
                 {
                     throw new ApiParserInternalException(ex);
                 }
-                catch (ApiParserInternalException ex)
+                catch (ApiParserInternalException ex) // need to catch this explicitly, because we catch a general Exception further down
                 {
                     throw new ApiParserInternalException(ex);
                 }
@@ -592,7 +581,8 @@ namespace ApiParser.V2
                     success = false;
                     if (i == amount - 1)
                     {
-                        ExceptionDispatchInfo.Capture(ex).Throw();
+                        throw new EndpointRequestException($"Api request via {methodName} on endpoint {_client.EndpointPath} " +
+                        $"failed after {amount} retries.", ex);
                     }
                 }
                 catch (ServerErrorException ex)
@@ -600,7 +590,8 @@ namespace ApiParser.V2
                     success = false;
                     if (i == amount - 1)
                     {
-                        ExceptionDispatchInfo.Capture(ex).Throw();
+                        throw new EndpointRequestException($"Api request via {methodName} on endpoint {_client.EndpointPath} " +
+                        $"failed after {amount} retries.", ex);
                     }
                 }
                 catch (ServiceUnavailableException ex)
@@ -608,10 +599,33 @@ namespace ApiParser.V2
                     success = false;
                     if (i == amount - 1)
                     {
-                        ExceptionDispatchInfo.Capture(ex).Throw();
+                        throw new EndpointRequestException($"Api request via {methodName} on endpoint {_client.EndpointPath} " +
+                        $"failed after {amount} retries.", ex);
                     }
                 }
-                // don't handle other RequestExceptions here, so they can be caught one layer up
+                catch (RequestException ex)
+                {
+                    throw new EndpointRequestException($"Api request via {methodName} on endpoint {_client.EndpointPath} " +
+                        $"failed.", ex);
+                }
+                catch (RequestException<ErrorObject> ex)
+                {
+                    throw new EndpointRequestException($"Api request via {methodName} on endpoint {_client.EndpointPath} " +
+                        $"failed.", ex);
+                }
+                catch (RequestException<string> ex)
+                {
+                    throw new EndpointRequestException($"Api request via {methodName} on endpoint {_client.EndpointPath} " +
+                        $"failed.", ex);
+                }
+                // catch all other RequestException<T> for unknown T. Pray that this does not catch anything else.
+                // In v1.7.4 RequestException<T> does not inherit from RequestException. If that changes in the future, this
+                // "solution" can be avoided.
+                catch (Exception ex)
+                {
+                    throw new EndpointRequestException($"Api request via {methodName} on endpoint {_client.EndpointPath} " +
+                        $"failed.", ex);
+                }
 
                 if (success)
                 {
