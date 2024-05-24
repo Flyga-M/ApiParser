@@ -40,9 +40,9 @@ namespace ApiParser
                 throw new ArgumentException($"{nameof(endpointClient)} can't be abstract. Given type: {endpointClient}.", nameof(endpointClient));
             }
 
-            if (!endpointClient.IsSubclassOf(typeof(IEndpointClient)))
+            if (!typeof(IEndpointClient).IsAssignableFrom(endpointClient))
             {
-                throw new ArgumentException($"{nameof(endpointClient)} must be subclass of {typeof(IEndpointClient)}. Given type: {endpointClient}.", nameof(endpointClient));
+                throw new ArgumentException($"{nameof(endpointClient)} must be derived from {typeof(IEndpointClient)}. Given type: {endpointClient}.", nameof(endpointClient));
             }
 
             EndpointPathAttribute endpointPath = GetAttribute<EndpointPathAttribute>(endpointClient);

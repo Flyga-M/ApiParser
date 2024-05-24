@@ -98,17 +98,21 @@ namespace ApiParser
             //{ GetEndpointPathAttribute(typeof(CharactersIdSkillsClient)), new TokenPermission[] { ACCOUNT, BUILDS, CHARACTERS } },
             //{ GetEndpointPathAttribute(typeof(CharactersIdSpecializations)), new TokenPermission[] { ACCOUNT, BUILDS, CHARACTERS } },
             { GetEndpointPathAttribute(typeof(CharactersIdTrainingClient)), new TokenPermission[] { ACCOUNT, BUILDS, CHARACTERS } },
-            { GetEndpointPathAttribute(typeof(CommerceClient)), new TokenPermission[] { ACCOUNT } },
-            { GetEndpointPathAttribute(typeof(CommerceDelivery)), new TokenPermission[] { ACCOUNT, TRADINGPOST } },
-            { GetEndpointPathAttribute(typeof(CommerceTransactionsClient)), new TokenPermission[] { ACCOUNT, TRADINGPOST } },
+            // not a valid endpoint
+            //{ GetEndpointPathAttribute(typeof(CommerceClient)), new TokenPermission[] { ACCOUNT } },
+            { GetEndpointPathAttribute(typeof(CommerceDeliveryClient)), new TokenPermission[] { ACCOUNT, TRADINGPOST } },
+            // not implemented as IEndpoint by gw2sharp
+            //{ GetEndpointPathAttribute(typeof(CommerceTransactionsClient)), new TokenPermission[] { ACCOUNT, TRADINGPOST } },
             // additional sub endpoint
-            { GetEndpointPathAttribute(typeof(CommerceTransactionsCurrentClient)), new TokenPermission[] { ACCOUNT, TRADINGPOST } },
+            // not implemented as IEndpoint by gw2sharp
+            //{ GetEndpointPathAttribute(typeof(CommerceTransactionsCurrentClient)), new TokenPermission[] { ACCOUNT, TRADINGPOST } },
             // additional sub endpoint
             { GetEndpointPathAttribute(typeof(CommerceTransactionsCurrentBuysClient)), new TokenPermission[] { ACCOUNT, TRADINGPOST } },
             // additional sub endpoint
             { GetEndpointPathAttribute(typeof(CommerceTransactionsCurrentSellsClient)), new TokenPermission[] { ACCOUNT, TRADINGPOST } },
             // additional sub endpoint
-            { GetEndpointPathAttribute(typeof(CommerceTransactionsHistoryClient)), new TokenPermission[] { ACCOUNT, TRADINGPOST } },
+            // not implemented as IEndpoint by gw2sharp
+            //{ GetEndpointPathAttribute(typeof(CommerceTransactionsHistoryClient)), new TokenPermission[] { ACCOUNT, TRADINGPOST } },
             // additional sub endpoint
             { GetEndpointPathAttribute(typeof(CommerceTransactionsHistoryBuysClient)), new TokenPermission[] { ACCOUNT, TRADINGPOST } },
             // additional sub endpoint
