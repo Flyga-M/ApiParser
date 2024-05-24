@@ -7,6 +7,8 @@ using ApiParser.V2.Settings;
 using System;
 using Gw2Sharp.WebApi.V2.Clients;
 using System.Reflection;
+using Gw2Sharp.WebApi.V2.Models;
+using System.Security.Authentication;
 
 namespace ApiParser.V2
 {
@@ -34,6 +36,53 @@ namespace ApiParser.V2
             }
             _client = client;
             Settings = settings;
+        }
+
+        /// <summary>
+        /// Returns the permissions, that are required to resolve the <paramref name="query"/>.
+        /// </summary>
+        /// <param name="query"></param>
+        /// <param name="settings"></param>
+        /// <returns>The permissions, that are required to resolve the <paramref name="query"/>. Might return 
+        /// <see langword="null"/>, if the endpoint is authorized and not properly implemented by this library.</returns>
+        /// <exception cref="ArgumentNullException">If <paramref name="query"/> is null.</exception>
+        /// <exception cref="SettingsException">If the <paramref name="query"/> contains at least one variable, but the 
+        /// VariableResolver of the <paramref name="settings"/> is null, or if the converted value of 
+        /// the resolved variable is not of the type that the <paramref name="settings"/> IndexConverter 
+        /// promised.</exception>
+        /// <exception cref="QueryResolveException">If the <paramref name="query"/> can't be resolved correctly.</exception>
+        /// <exception cref="QueryParsingException">If the <paramref name="query"/> contains a variable and the 
+        /// resolved variable can't be parsed correctly.</exception>
+        public async Task<TokenPermission[]> RequiredPermissions(EndpointQuery query, QuerySettings? settings = null)
+        {
+            // TODO: lots of duplicated code from ResolveQuery. Should be moved to it's own method
+            if (query == null)
+            {
+                throw new ArgumentNullException(nameof(query));
+            }
+
+            if (settings == null)
+            {
+                settings = QuerySettings.Default;
+            }
+
+            if (query.ContainsVariable && settings.Value.VariableResolver == null)
+            {
+                throw new SettingsException($"Unable to retrieve required permissions for query {query}, because query " +
+                    $"contains at least one variable, but the variable resolver in the {nameof(settings)} is null.");
+            }
+
+            ProcessedQueryData[] queryData = await ProcessQuery(_client, query, settings.Value);
+
+            ProcessedQueryData validCandidate = queryData.LastOrDefault();
+
+            if (validCandidate == null)
+            {
+                throw new QueryResolveException($"Unable to retrieve required permissions for query {query}, because query " +
+                    $"can't be successfully processed.");
+            }
+
+            return PermissionUtil.GetPermissions(validCandidate.Client);
         }
 
         /// <summary>

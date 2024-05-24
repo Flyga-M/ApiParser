@@ -8,6 +8,7 @@ using System;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -58,6 +59,12 @@ namespace ApiParser.V2
         /// </summary>
         public DateTime LastAccess { get; private set; } = DateTime.MinValue;
 
+        /// <summary>
+        /// The <see cref="TokenPermission"/>s that are required to access this endpoint. Might be <see langword="null"/>, if 
+        /// the endpoint is authorized and not properly implemented by this library.
+        /// </summary>
+        public readonly TokenPermission[] RequiredPermissions;
+
         /// <exception cref="ArgumentNullException">If either <paramref name="apiClient"/>, <paramref name="endpointClient"/> 
         /// or <paramref name="path"/> is null.</exception>
         /// <exception cref="ArgumentOutOfRangeException">If <paramref name="cooldown"/> is less than zero.</exception>
@@ -95,6 +102,8 @@ namespace ApiParser.V2
             _client = endpointClient;
             _path = path;
             Cooldown = cooldown;
+
+            RequiredPermissions = PermissionUtil.GetPermissions(_client);
         }
 
         /// <exception cref="QueryNotSupportedException">If the <paramref name="queryData"/> path is not the same as 
