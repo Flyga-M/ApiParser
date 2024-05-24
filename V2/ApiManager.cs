@@ -289,5 +289,31 @@ namespace ApiParser.V2
             return new ProcessedIndexData(resolved, traversedIndices, remainingIndices);
         }
 
+        /// <summary>
+        /// Clears the data of the last response from the gw2 api for every endpoint.
+        /// </summary>
+        public void ClearCache()
+        {
+            foreach (EndpointManager endpointManager in _endpointsByPath.Values)
+            {
+                endpointManager.ClearCache();
+            }
+
+            _endpointsByPath.Clear();
+        }
+
+        /// <summary>
+        /// Clears the data of the last response from the gw2 api for the given <paramref name="endpointPath"/>.
+        /// </summary>
+        public void ClearCache(string endpointPath)
+        {
+            if (!_endpointsByPath.ContainsKey(endpointPath))
+            {
+                return;
+            }
+
+            _endpointsByPath[endpointPath].ClearCache();
+            _endpointsByPath.Remove(endpointPath);
+        }
     }
 }

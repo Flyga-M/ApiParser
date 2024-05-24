@@ -644,5 +644,12 @@ namespace ApiParser.V2
             return result;
         }
 
+        /// <summary>
+        /// Clears the data of the last response from the gw2 api.
+        /// </summary>
+        public void ClearCache()
+        {
+            _endpointData = null;
+        }
     }
 }
