@@ -104,6 +104,9 @@ namespace ApiParser
             return PermissionUtil.GetPermissions(validCandidate.Client);
         }
 
+        // TODO: SettingsException should not occur, when VariableResolver is null. It's not a settings problem, when
+        // TODO: a user inserts variables, that can't be resolved.
+
         /// <summary>
         /// Resolves the provided <paramref name="query"/> and retrieves the data from the gw2 api.
         /// </summary>

@@ -11,11 +11,6 @@ namespace ApiParser
     public static class ReflectionUtil
     {
         /// <summary>
-        /// Does not catch potential exceptions from the async method.
-        /// </summary>
-
-
-        /// <summary>
         /// Invokes the async method with the <paramref name="methodName"/> on the <paramref name="object"/> 
         /// with the given <paramref name="parameters"/> and returns it's result. Does not catch any potential 
         /// <see cref="Exception"/>s from the async method.
