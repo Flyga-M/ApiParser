@@ -8,7 +8,6 @@ using System;
 using Gw2Sharp.WebApi.V2.Clients;
 using System.Reflection;
 using Gw2Sharp.WebApi.V2.Models;
-using System.Security.Authentication;
 
 namespace ApiParser.V2
 {
@@ -16,9 +15,13 @@ namespace ApiParser.V2
     /// Manages the <see cref="EndpointManager"/>s. May be used to resolve an <see cref="EndpointQuery"/> and retrieve 
     /// data from the gw2 api.
     /// </summary>
-    public class ApiManager
+    public class ApiManager : IDisposable
     {
+        private bool _disposed;
+
         private readonly IGw2WebApiV2Client _client;
+
+        private IssueTracker _issueTracker;
 
         private readonly Dictionary<string, EndpointManager> _endpointsByPath = new Dictionary<string, EndpointManager>();
 
@@ -26,6 +29,17 @@ namespace ApiParser.V2
         /// Determines how the <see cref="ApiManager"/> manages the <see cref="EndpointManager"/>s.
         /// </summary>
         public ApiManagerSettings Settings { get; }
+
+        /// <inheritdoc cref="IssueTracker.State"/>
+        public ApiState State => _issueTracker.State;
+
+        /// <inheritdoc cref="IssueTracker.StateChanged"/>
+        public EventHandler<ApiState> StateChanged;
+
+        private void OnStateChange(object _, ApiState state)
+        {
+            StateChanged?.Invoke(this, state);
+        }
 
         /// <exception cref="ArgumentNullException">If <paramref name="client"/> is null.</exception>
         public ApiManager(IGw2WebApiV2Client client, ApiManagerSettings settings)
@@ -36,6 +50,10 @@ namespace ApiParser.V2
             }
             _client = client;
             Settings = settings;
+
+            _issueTracker = new IssueTracker(settings);
+
+            _issueTracker.StateChanged += OnStateChange;
         }
 
         /// <summary>
@@ -104,8 +122,14 @@ namespace ApiParser.V2
         /// <exception cref="ApiParserInternalException">If there is an error with the internal logic of the library.</exception>
         /// <exception cref="EndpointRequestException">If the api responds with an error and the error is not recoverable 
         /// via the <see cref="ResolveMode"/> of the <paramref name="settings"/>.</exception>
+        /// <exception cref="ObjectDisposedException">If the <see cref="ApiManager"/> was disposed.</exception>
         public async Task<object> ResolveQuery(EndpointQuery query, QuerySettings? settings = null)
         {
+            if (_disposed)
+            {
+                throw new ObjectDisposedException(GetType().FullName);
+            }
+            
             if (query == null)
             {
                 throw new ArgumentNullException(nameof(query));
@@ -136,7 +160,7 @@ namespace ApiParser.V2
             {
                 try
                 {
-                    _endpointsByPath[validCandidate.Path.ToString()] = new EndpointManager(_client, validCandidate.Client, validCandidate.Path, Settings.Cooldown);
+                    _endpointsByPath[validCandidate.Path.ToString()] = new EndpointManager(_client, validCandidate.Client, validCandidate.Path, Settings.Cooldown, _issueTracker);
                 }
                 catch (EndpointException ex)
                 {
@@ -363,6 +387,44 @@ namespace ApiParser.V2
 
             _endpointsByPath[endpointPath].ClearCache();
             _endpointsByPath.Remove(endpointPath);
+        }
+
+        /// <inheritdoc/>
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        /// <inheritdoc/>
+        protected virtual void Dispose(bool disposing)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            if (disposing)
+            {
+                if (_issueTracker != null)
+                {
+                    _issueTracker.StateChanged -= OnStateChange;
+
+                    _issueTracker.Dispose();
+                    _issueTracker = null;
+                }
+            }
+
+            StateChanged = null;
+            _endpointsByPath.Clear();
+
+            _disposed = true;
+        }
+
+        /// <inheritdoc/>
+        ~ApiManager()
+        {
+            Dispose(false);
         }
     }
 }

@@ -24,7 +24,9 @@ namespace ApiParser.V2
         private readonly EndpointQuery _path;
 
         private object _endpointData;
-        
+
+        private readonly IssueTracker _issueTracker;
+
         /// <summary>
         /// How much milliseconds have to pass, until the data of the <see cref="EndpointManager"/> can be refreshed.
         /// </summary>
@@ -70,7 +72,7 @@ namespace ApiParser.V2
         /// <exception cref="ArgumentOutOfRangeException">If <paramref name="cooldown"/> is less than zero.</exception>
         /// <exception cref="EndpointException">If the <paramref name="endpointClient"/> is neither all expandable nor 
         /// has blob data.</exception>
-        public EndpointManager(IGw2WebApiV2Client apiClient, IEndpointClient endpointClient, EndpointQuery path, double cooldown)
+        public EndpointManager(IGw2WebApiV2Client apiClient, IEndpointClient endpointClient, EndpointQuery path, double cooldown, IssueTracker issueTracker = null)
         {
             if (apiClient == null)
             {
@@ -102,6 +104,7 @@ namespace ApiParser.V2
             _client = endpointClient;
             _path = path;
             Cooldown = cooldown;
+            _issueTracker = issueTracker;
 
             RequiredPermissions = PermissionUtil.GetPermissions(_client);
         }
@@ -593,6 +596,7 @@ namespace ApiParser.V2
                 }
                 catch (TooManyRequestsException ex)
                 {
+                    _issueTracker?.AddIssue(ex);
                     success = false;
                     if (i == amount - 1)
                     {
@@ -602,6 +606,7 @@ namespace ApiParser.V2
                 }
                 catch (ServerErrorException ex)
                 {
+                    _issueTracker?.AddIssue(ex);
                     success = false;
                     if (i == amount - 1)
                     {
@@ -611,6 +616,7 @@ namespace ApiParser.V2
                 }
                 catch (ServiceUnavailableException ex)
                 {
+                    _issueTracker?.AddIssue(ex);
                     success = false;
                     if (i == amount - 1)
                     {
@@ -650,6 +656,7 @@ namespace ApiParser.V2
                 await Task.Delay(delay);
             }
 
+            _issueTracker?.AddSuccess();
             return result;
         }
 
