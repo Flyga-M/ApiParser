@@ -9,6 +9,7 @@ using Gw2Sharp.WebApi.V2.Clients;
 using System.Reflection;
 using Gw2Sharp.WebApi.V2.Models;
 using Gw2Sharp.WebApi;
+using static ApiParser.QueryUtil;
 
 namespace ApiParser
 {
@@ -74,32 +75,7 @@ namespace ApiParser
         /// resolved variable can't be parsed correctly.</exception>
         public async Task<TokenPermission[]> RequiredPermissions(EndpointQuery query, QuerySettings? settings = null)
         {
-            // TODO: lots of duplicated code from ResolveQuery. Should be moved to it's own method
-            if (query == null)
-            {
-                throw new ArgumentNullException(nameof(query));
-            }
-
-            if (settings == null)
-            {
-                settings = QuerySettings.Default;
-            }
-
-            if (query.ContainsVariable && settings.Value.VariableResolver == null)
-            {
-                throw new SettingsException($"Unable to retrieve required permissions for query {query}, because query " +
-                    $"contains at least one variable, but the variable resolver in the {nameof(settings)} is null.");
-            }
-
-            ProcessedQueryData[] queryData = await ProcessQuery(_client, query, settings.Value);
-
-            ProcessedQueryData validCandidate = queryData.LastOrDefault();
-
-            if (validCandidate == null)
-            {
-                throw new QueryResolveException($"Unable to retrieve required permissions for query {query}, because query " +
-                    $"can't be successfully processed.");
-            }
+            ProcessedQueryData validCandidate = await GetValidCandidateAsync(query, settings);
 
             return PermissionUtil.GetPermissions(validCandidate.Client);
         }
@@ -127,16 +103,11 @@ namespace ApiParser
         /// <exception cref="EndpointRequestException">If the api responds with an error and the error is not recoverable 
         /// via the <see cref="ResolveMode"/> of the <paramref name="settings"/>.</exception>
         /// <exception cref="ObjectDisposedException">If the <see cref="ApiManager"/> was disposed.</exception>
-        public async Task<object> ResolveQuery(EndpointQuery query, QuerySettings? settings = null)
+        public async Task<object> ResolveQueryAsync(EndpointQuery query, QuerySettings? settings = null)
         {
             if (_disposed)
             {
                 throw new ObjectDisposedException(GetType().FullName);
-            }
-            
-            if (query == null)
-            {
-                throw new ArgumentNullException(nameof(query));
             }
 
             if (settings == null)
@@ -144,21 +115,7 @@ namespace ApiParser
                 settings = QuerySettings.Default;
             }
 
-            if (query.ContainsVariable && settings.Value.VariableResolver == null)
-            {
-                throw new SettingsException($"Unable to resolve query {query}, because it contains at least one " +
-                    $"variable, but the variable resolver in the {nameof(settings)} is null.");
-            }
-
-            ProcessedQueryData[] queryData = await ProcessQuery(_client, query, settings.Value);
-
-            ProcessedQueryData validCandidate = queryData.LastOrDefault();
-
-            if (validCandidate == null)
-            {
-                throw new QueryResolveException($"Unable to resolve query {query}, because it can't be successfully " +
-                    $"processed.");
-            }
+            ProcessedQueryData validCandidate = await GetValidCandidateAsync(query, settings);
 
             if (!_endpointsByPath.ContainsKey(validCandidate.Path.ToString()))
             {
@@ -176,7 +133,7 @@ namespace ApiParser
 
             try
             {
-                result = await _endpointsByPath[validCandidate.Path.ToString()].ResolveQuery(validCandidate, settings.Value);
+                result = await _endpointsByPath[validCandidate.Path.ToString()].ResolveQueryAsync(validCandidate, settings.Value);
             }
             catch (QueryNotSupportedException ex)
             {
@@ -184,6 +141,55 @@ namespace ApiParser
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Returns the valid candidate to resolve the <paramref name="query"/>.
+        /// </summary>
+        /// <param name="query"></param>
+        /// <param name="settings"></param>
+        /// <returns>The valid candidate to resolve the <paramref name="query"/>.</returns>
+        /// <exception cref="ArgumentNullException">If <paramref name="query"/> is null.</exception>
+        /// <exception cref="SettingsException">If the <paramref name="query"/> contains at least one variable, but the 
+        /// VariableResolver of the <paramref name="settings"/> is null, or if the converted value of 
+        /// the resolved variable is not of the type that the <paramref name="settings"/> IndexConverter 
+        /// promised.</exception>
+        /// <exception cref="QueryResolveException">If <see cref="EndpointQueryPart.EndpointName"/> is <see langword="null"/> 
+        /// for any <see cref="EndpointQueryPart"/> in <paramref name="query"/>, or if any <see cref="EndpointQueryPart"/> 
+        /// is ambigiuous, or if the property targeted by any <see cref="EndpointQueryPart"/> does not exist, or if 
+        /// the resulting object is <see langword="null"/>, or if the indexer for any of the indices throws an 
+        /// exception, or if no valid candidate can be found.</exception>
+        /// <exception cref="QueryParsingException">If the <paramref name="query"/> contains a variable and the 
+        /// resolved variable can't be parsed correctly.</exception>
+        private async Task<ProcessedQueryData> GetValidCandidateAsync(EndpointQuery query, QuerySettings? settings = null)
+        {
+            if (query == null)
+            {
+                throw new ArgumentNullException(nameof(query));
+            }
+
+            if (settings == null)
+            {
+                settings = QuerySettings.Default;
+            }
+
+            if (query.ContainsVariable && settings.Value.VariableResolver == null)
+            {
+                throw new SettingsException($"Unable to retrieve required permissions for query {query}, because query " +
+                    $"contains at least one variable, but the variable resolver in the {nameof(settings)} is null.");
+            }
+
+            ProcessedQueryData[] queryData = await ProcessQueryAsync(_client, query, settings.Value);
+
+            ProcessedQueryData validCandidate = queryData.LastOrDefault();
+
+            if (validCandidate == null)
+            {
+                throw new QueryResolveException($"Unable to retrieve required permissions for query {query}, because query " +
+                    $"can't be successfully processed.");
+            }
+
+            return validCandidate;
         }
 
         // this is currently built on the assumption, that no attribute from an api response has the same name as a
@@ -194,177 +200,6 @@ namespace ApiParser
 
         // This is not ideal, because in the case of a faulty query, it would have to update all the constructed 
         // endpoints, to see if there is a match. Hence why this is not implemented preemptively.
-
-        /// <exception cref="QueryResolveException">If the <paramref name="query"/> can't be resolved correctly.</exception>
-        /// <exception cref="QueryParsingException">If the <paramref name="query"/> contains a variable and the 
-        /// resolved variable can't be parsed correctly.</exception>
-        /// <exception cref="SettingsException">If the <paramref name="query"/> contains a variable and the converted value of 
-        /// the resolved variable is not of the type that the <see cref="ParseSettings"/> IndexConverter of 
-        /// the <paramref name="query"/> promised.</exception>
-        private async Task<ProcessedQueryData[]> ProcessQuery(IGw2WebApiV2Client apiClient, EndpointQuery query, QuerySettings settings)
-        {
-            List<ProcessedQueryData> result = new List<ProcessedQueryData>();
-
-            object resolved = apiClient;
-
-            List<EndpointQueryPart> traversedParts = new List<EndpointQueryPart>();
-            List<EndpointQueryPart> remainingParts = new List<EndpointQueryPart>(query.QueryParts);
-
-            EndpointQueryIndex[] remainingIndices = Array.Empty<EndpointQueryIndex>();
-
-            foreach (EndpointQueryPart part in query.QueryParts)
-            {
-                string property = part.EndpointName;
-
-                if (string.IsNullOrWhiteSpace(property))
-                {
-                    throw new QueryResolveException($"Unable to resolve query {query}, because a query part name" +
-                        $"is null, empty or whitespace.");
-                }
-
-                PropertyInfo propertyInfo;
-
-                try
-                {
-                    propertyInfo = resolved.GetType().GetProperty(property);
-                }
-                catch (AmbiguousMatchException ex)
-                {
-                    throw new QueryResolveException($"Unable to resolve query {query}, because the query part {part} " +
-                        $"is ambigiuous.", ex);
-                }
-
-                if (propertyInfo == null) // property does not exist
-                {
-                    if (!result.Any())
-                    {
-                        throw new QueryResolveException($"Unable to resolve query {query}, because no endpoint " +
-                            $"with that path exists.");
-                    }
-                    break;
-                }
-
-                traversedParts.Add(part);
-                remainingParts.RemoveAt(0);
-
-                // TODO: evaluate if this needs to be in a try catch
-                resolved = propertyInfo.GetValue(resolved);
-
-                if (resolved == null)
-                {
-                    throw new QueryResolveException($"Unable to resolve query {query}. The given part {part} could be " +
-                        $"found, but is null.");
-                }
-
-                if (part.Enumerate)
-                {
-                    // don't catch anything, so it can bubble up
-                    ProcessedIndexData indexData = await ResolveIndices(resolved, part.Indices, settings);
-
-                    resolved = indexData.Resolved;
-                    remainingIndices = indexData.RemainingIndices;
-
-                    EndpointQueryPart currentPart = traversedParts.Last();
-                    
-                    if (remainingIndices.Any()) // if not all indices are traversed, remove the remaining from the current part
-                    {
-                        currentPart = new EndpointQueryPart(currentPart.EndpointName, indexData.TraversedIndices, currentPart.Settings);
-                    }
-
-                    traversedParts.RemoveAt(traversedParts.Count - 1);
-                    traversedParts.Add(currentPart);
-                }
-
-                if (resolved == null)
-                {
-                    throw new QueryResolveException($"Unable to resolve query {query}. The given part {part} could be " +
-                        $"enumerated, but is null.");
-                }
-
-                if (resolved is IEndpointClient endpointClient)
-                {
-                    EndpointQuery path = new EndpointQuery(traversedParts, query.Settings);
-                    EndpointQuery subQuery = null;
-                    if (remainingParts.Any())
-                    {
-                        subQuery = new EndpointQuery(remainingParts, query.Settings);
-                    }
-                    result.Add(new ProcessedQueryData(endpointClient, path, subQuery, remainingIndices));
-                }
-
-                // if there are remaining indices, this path cannot continue to be traversed
-                // else this might lead to issues where X[1][2]["abc"].Y.Z will be resolved as
-                // X[1].Y.Z with remainingIndices.Count = 0 if X[1][2] can not be resolved
-                if (remainingIndices.Any())
-                {
-                    break;
-                }
-            }
-
-            return result.ToArray();
-        }
-
-        /// <exception cref="QueryResolveException">If any of the <paramref name="indices"/> can't be resolved correctly.</exception>
-        /// <exception cref="QueryParsingException">If any of the <paramref name="indices"/> contain a variable and the 
-        /// resolved variable can't be parsed correctly.</exception>
-        /// <exception cref="SettingsException">If any of the <paramref name="indices"/> contain a variable and the 
-        /// resolved variable is not of the type that the <see cref="ParseSettings"/> IndexConverter of the 
-        /// <paramref name="indices"/> promised.</exception>
-        private async Task<ProcessedIndexData> ResolveIndices(object @object, EndpointQueryIndex[] indices, QuerySettings settings)
-        {
-            object resolved = @object;
-            List<EndpointQueryIndex> traversedIndices = new List<EndpointQueryIndex>();
-            List<EndpointQueryIndex> remainingIndices = new List<EndpointQueryIndex>(indices);
-
-            foreach (EndpointQueryIndex index in indices)
-            {
-                object indexValue;
-
-                if (index.IsVariable)
-                {
-                    // don't catch anything, so it can bubble up
-                    indexValue = await index.ResolveVariable(settings.VariableResolver);
-                }
-                else
-                {
-                    indexValue = index.Value;
-                }
-
-                PropertyInfo indexer;
-
-                indexer = resolved.GetType().GetIndexer(new Type[] { index.IndexType });
-
-                if (indexer == null) // not directly enumerable with the given type
-                {
-                    return new ProcessedIndexData(resolved, traversedIndices, remainingIndices);
-                }
-
-                traversedIndices.Add(index);
-                remainingIndices.RemoveAt(0);
-
-                object value;
-
-                try
-                {
-                    value = indexer.GetValue(resolved, new object[] { indexValue });
-                }
-                catch (TargetInvocationException ex)
-                {
-                    throw new QueryResolveException($"Indexer of object of type {resolved.GetType()} threw an exception " +
-                        $"for index value {indexValue}.", ex);
-                }
-
-                if (value == null)
-                {
-                    throw new QueryResolveException($"Unable to resolve indices {string.Join<EndpointQueryIndex>(", ", indices)} " +
-                        $"in query. The given index {index} could be used, but it's value returns null.");
-                }
-
-                resolved = value;
-            }
-
-            return new ProcessedIndexData(resolved, traversedIndices, remainingIndices);
-        }
 
         /// <summary>
         /// Clears the data of the last response from the gw2 api for every endpoint.

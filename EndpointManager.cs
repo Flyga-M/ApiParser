@@ -11,6 +11,7 @@ using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using static ApiParser.QueryUtil;
 
 namespace ApiParser
 {
@@ -114,7 +115,7 @@ namespace ApiParser
         /// VariableResolver of the <paramref name="settings"/> is null, or if the converted value of 
         /// the resolved variable is not of the type that the <paramref name="settings"/> IndexConverter 
         /// promised.</exception>
-        public async Task<object> ResolveQuery(ProcessedQueryData queryData, QuerySettings settings)
+        public async Task<object> ResolveQueryAsync(ProcessedQueryData queryData, QuerySettings settings)
         {
             if (queryData.Path.ToString() != _path.ToString())
             {
@@ -130,7 +131,7 @@ namespace ApiParser
 
             try
             {
-                await UpdateEndpoint(settings);
+                await UpdateEndpointAsync(settings);
             }
             catch (NotImplementedException ex)
             {
@@ -147,7 +148,15 @@ namespace ApiParser
 
             if (queryData.RemainingIndices != null && queryData.RemainingIndices.Any())
             {
-                endpointData = await ResolveIndices(endpointData, queryData.RemainingIndices, settings);
+                ProcessedIndexData resolvedIndices = await ResolveIndicesAsync(endpointData, queryData.RemainingIndices, settings);
+
+                if (!resolvedIndices.Completed)
+                {
+                    throw new QueryResolveException($"Object of type {endpointData.GetType()} has no indexer for " +
+                    $"{resolvedIndices.RemainingIndices.First().IndexType}.");
+                }
+
+                endpointData = resolvedIndices.Resolved;
             }
 
             if (endpointData == null)
@@ -160,119 +169,16 @@ namespace ApiParser
             {
                 return endpointData;
             }
-            endpointData = await ResolveSubQuery(endpointData, queryData.SubQuery, settings);
+            endpointData = await ResolveSubQueryAsync(endpointData, queryData.SubQuery, settings);
 
             return endpointData;
-        }
-
-        /// <exception cref="QueryResolveException"></exception>
-        /// <exception cref="QueryParsingException"></exception>
-        /// <exception cref="SettingsException"></exception>
-        private async Task<object> ResolveSubQuery(object endpointData, EndpointQuery subQuery, QuerySettings settings)
-        {
-            object result = endpointData;
-
-            foreach(EndpointQueryPart queryPart in subQuery.QueryParts)
-            {
-                string property = queryPart.EndpointName;
-
-                PropertyInfo propertyInfo;
-
-                try
-                {
-                    propertyInfo = result.GetType().GetProperty(property);
-                }
-                catch (AmbiguousMatchException ex)
-                {
-                    throw new QueryResolveException($"Unable to resolve sub query {subQuery}, because the query part {queryPart} " +
-                        $"is ambigiuous.", ex);
-                }
-
-                if (propertyInfo == null)
-                {
-                    throw new QueryResolveException($"Unable to resolve sub query at part {queryPart.EndpointName}. The " +
-                        $"given property {property} could not be found.");
-                }
-
-                result = propertyInfo.GetValue(result);
-
-                if (result == null)
-                {
-                    throw new QueryResolveException($"Unable to resolve sub query at part {queryPart.EndpointName}. The " +
-                        $"given property {property} could be found, but is null.");
-                }
-
-                if (queryPart.Enumerate)
-                {
-                    result = await ResolveIndices(result, queryPart.Indices, settings);
-                }
-            }
-
-            return result;
-        }
-
-        // TODO: is very similar to ApiManager.ResolveIndices. Maybe they can be moved to a utility class
-
-        /// <exception cref="QueryResolveException"></exception>
-        /// <exception cref="QueryParsingException"></exception>
-        /// <exception cref="SettingsException"></exception>
-        private async Task<object> ResolveIndices(object @object, EndpointQueryIndex[] indices, QuerySettings settings)
-        {
-            object result = @object;
-
-            foreach (EndpointQueryIndex index in indices)
-            {
-                object indexValue;
-
-                if (index.IsVariable)
-                {
-                    // don't catch anything, so it can bubble up
-                    indexValue = await index.ResolveVariable(settings.VariableResolver);
-                }
-                else
-                {
-                    indexValue = index.Value;
-                }
-
-                PropertyInfo indexer;
-
-                indexer = result.GetType().GetIndexer(new Type[] { index.IndexType });
-
-                if (indexer == null) // not directly enumerable with the given type
-                {
-                    throw new QueryResolveException($"Object of type {result.GetType()} has no indexer for " +
-                        $"{index.IndexType}.");
-                }
-
-                object value;
-
-                try
-                {
-                    value = indexer.GetValue(result, new object[] { indexValue });
-                }
-                catch (TargetInvocationException ex)
-                {
-                    throw new QueryResolveException($"Indexer of object of type {result.GetType()} threw an exception " +
-                        $"for index value {indexValue}.", ex);
-                }
-
-                if (value == null)
-                {
-                    throw new QueryResolveException($"Unable to resolve indices {string.Join<EndpointQueryIndex>(", ", indices)} " +
-                        $"in query. The given index {index} could be used, but it's value returns null.");
-                }
-
-                result = value;
-            }
-
-            return result;
         }
 
         /// <exception cref="ApiParserInternalException"></exception>
         /// <exception cref="SettingsException"></exception>
         /// <exception cref="NotImplementedException"></exception>
         /// <exception cref="EndpointRequestException"></exception>
-        private async Task UpdateEndpoint(QuerySettings settings)
+        private async Task UpdateEndpointAsync(QuerySettings settings)
         {
             if (!CanRefresh)
             {

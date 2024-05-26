@@ -25,6 +25,11 @@ namespace ApiParser
         /// </summary>
         public readonly EndpointQueryIndex[] RemainingIndices;
 
+        /// <summary>
+        /// Determines whether there are no <see cref="RemainingIndices"/> left, after the index data was processed.
+        /// </summary>
+        public bool Completed => RemainingIndices == null || RemainingIndices.Length == 0;
+
         /// <exception cref="ArgumentNullException">If <paramref name="resolved"/> is null.</exception>
         /// <exception cref="ArgumentException">If <paramref name="remainingIndices"/> and <paramref name="traversedIndices"/> 
         /// are both null or empty.</exception>

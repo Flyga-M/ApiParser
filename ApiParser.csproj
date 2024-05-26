@@ -118,6 +118,7 @@
     <Compile Include="_Extensions\StringExtensions.cs" />
     <Compile Include="_Util\BracketUtil.cs" />
     <Compile Include="_Util\PermissionUtil.cs" />
+    <Compile Include="_Util\QueryUtil.cs" />
     <Compile Include="_Util\ReflectionUtil.cs" />
     <Compile Include="_Util\RequestExceptionUtil.cs" />
   </ItemGroup>
