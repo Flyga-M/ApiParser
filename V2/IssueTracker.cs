@@ -173,7 +173,7 @@ namespace ApiParser.V2
                 return;
             }
 
-            if (IssueRatio - Settings.RealiableApiCutoff > 0.0001f)
+            if (IssueRatio - Settings.ReliableApiCutoff > 0.0001f)
             {
                 State = ApiState.Unreliable;
             }
