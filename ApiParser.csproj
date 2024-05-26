@@ -83,6 +83,8 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ApiManager.cs" />
+    <Compile Include="Endpoint\_Builder\EndpointQueryBuilder.cs" />
+    <Compile Include="Endpoint\_Builder\EndpointQueryPartBuilder.cs" />
     <Compile Include="IssueTracker.cs" />
     <Compile Include="EndpointManager.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
