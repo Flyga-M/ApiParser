@@ -1,7 +1,7 @@
 ﻿using System.Threading.Tasks;
-using ApiParser.V2.Endpoint;
+using ApiParser.Endpoint;
 
-namespace ApiParser.V2.Settings
+namespace ApiParser.Settings
 {
     /// <summary>
     /// Represents a class, that is able to resolve a variable inside an <see cref="EndpointQuery"/>.

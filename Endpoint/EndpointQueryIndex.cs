@@ -1,9 +1,9 @@
-﻿using ApiParser.V2.Settings;
+﻿using ApiParser.Settings;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace ApiParser.V2.Endpoint
+namespace ApiParser.Endpoint
 {
     /// <summary>
     /// An index of a <see cref="EndpointQueryPart"/> of a <see cref="EndpointQuery"/>. Used for enumerable endpoints or 
@@ -199,9 +199,7 @@ namespace ApiParser.V2.Endpoint
                 throw new QueryParsingException($"Value {valueString} could not be converted to {nameof(valueType)} {valueType}.");
             }
 
-            // TODO: this might raise problems when an IndexConverter promises a more general type, but the returned type is a subtype
-            // this is currently not really a problem, since indices are either string, int or guid. But should still be adressed.
-            if (result.GetType() != valueType)
+            if (result.GetType() != valueType && !valueType.IsAssignableFrom(result.GetType()))
             {
                 throw new SettingsException($"IndexConverter for type {valueType} did successfully convert value " +
                     $"{valueString}, but value is not of promised type {valueType}. Given type: {result.GetType()}");

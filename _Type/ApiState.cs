@@ -1,11 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Gw2Sharp.WebApi.Exceptions;
+﻿using Gw2Sharp.WebApi.Exceptions;
 
-namespace ApiParser.V2
+namespace ApiParser
 {
     /// <summary>
     /// Provides information on the assumed current state of the gw2 api.

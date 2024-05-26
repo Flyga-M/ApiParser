@@ -1,4 +1,4 @@
-﻿namespace ApiParser.V2.Settings
+﻿namespace ApiParser.Settings
 {
     /// <summary>
     /// Determines how to continue, after a recoverable api error.

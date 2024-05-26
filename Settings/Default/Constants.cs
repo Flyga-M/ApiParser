@@ -1,4 +1,4 @@
-﻿namespace ApiParser.V2.Settings.Default
+﻿namespace ApiParser.Settings.Default
 {
     /// <summary>
     /// Contains the constants used by the default <see cref="ParseSettings"/>.

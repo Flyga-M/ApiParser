@@ -1,6 +1,6 @@
 ﻿using System.Threading.Tasks;
 
-namespace ApiParser.V2.Settings.Default
+namespace ApiParser.Settings.Default
 {
     /// <inheritdoc cref="IQueryVariableResolver"/>
     public class QueryVariableResolver : IQueryVariableResolver

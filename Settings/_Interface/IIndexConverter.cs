@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace ApiParser.V2.Settings
+namespace ApiParser.Settings
 {
     /// <summary>
     /// Represents a class that can convert a string to a specific index type.

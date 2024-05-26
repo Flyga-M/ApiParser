@@ -1,9 +1,9 @@
-﻿using ApiParser.V2.Endpoint;
+﻿using ApiParser.Endpoint;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace ApiParser.V2
+namespace ApiParser
 {
     /// <summary>
     /// Contains data of processed indices.

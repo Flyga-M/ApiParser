@@ -1,10 +1,10 @@
-﻿using ApiParser.V2.Endpoint;
+﻿using ApiParser.Endpoint;
 using Gw2Sharp.WebApi.V2.Clients;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace ApiParser.V2
+namespace ApiParser
 {
     /// <summary>
     /// Contains data of a processed <see cref="EndpointQuery"/>.

@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace ApiParser.V2.Settings
+namespace ApiParser.Settings
 {
     // TODO: should probably be a class for proper value checking
     

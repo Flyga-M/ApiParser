@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace ApiParser.V2.Settings.Default
+namespace ApiParser.Settings.Default
 {
     /// <summary>
     /// A <see cref="string"/> <see cref="IIndexConverter"/>.

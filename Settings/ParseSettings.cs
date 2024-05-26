@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace ApiParser.V2.Settings
+namespace ApiParser.Settings
 {
     /// <summary>
     /// Determines how a query is parsed.

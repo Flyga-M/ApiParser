@@ -1,6 +1,6 @@
 ﻿using Gw2Sharp.WebApi.Exceptions;
 
-namespace ApiParser.V2
+namespace ApiParser
 {
     /// <summary>
     /// Contains information on the issue that occured with the gw2 api.

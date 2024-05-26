@@ -1,9 +1,9 @@
-﻿using ApiParser.V2.Settings;
+﻿using ApiParser.Settings;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace ApiParser.V2.Endpoint
+namespace ApiParser.Endpoint
 {
     /// <summary>
     /// A gw2 api query, that can be resolved via the <see cref="ApiManager"/>.

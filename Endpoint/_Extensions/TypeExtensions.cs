@@ -2,7 +2,7 @@
 using System.Linq;
 using System.Reflection;
 
-namespace ApiParser.V2.Endpoint
+namespace ApiParser.Endpoint
 {
     /// <summary>
     /// Provides extension methods for the <see cref="Type"/> class.

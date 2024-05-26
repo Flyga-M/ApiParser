@@ -1,5 +1,5 @@
-﻿using ApiParser.V2.Endpoint;
-using ApiParser.V2.Settings;
+﻿using ApiParser.Endpoint;
+using ApiParser.Settings;
 using Gw2Sharp.WebApi.Exceptions;
 using Gw2Sharp.WebApi.V2;
 using Gw2Sharp.WebApi.V2.Clients;
@@ -12,14 +12,13 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace ApiParser.V2
+namespace ApiParser
 {
     /// <summary>
     /// Manages the cache, updates and query for an endpoint.
     /// </summary>
     public class EndpointManager
     {
-        private readonly IGw2WebApiV2Client _apiClient;
         private readonly IEndpointClient _client;
         private readonly EndpointQuery _path;
 
@@ -67,18 +66,13 @@ namespace ApiParser.V2
         /// </summary>
         public readonly TokenPermission[] RequiredPermissions;
 
-        /// <exception cref="ArgumentNullException">If either <paramref name="apiClient"/>, <paramref name="endpointClient"/> 
+        /// <exception cref="ArgumentNullException">If either <paramref name="endpointClient"/> 
         /// or <paramref name="path"/> is null.</exception>
         /// <exception cref="ArgumentOutOfRangeException">If <paramref name="cooldown"/> is less than zero.</exception>
         /// <exception cref="EndpointException">If the <paramref name="endpointClient"/> is neither all expandable nor 
         /// has blob data.</exception>
-        public EndpointManager(IGw2WebApiV2Client apiClient, IEndpointClient endpointClient, EndpointQuery path, double cooldown, IssueTracker issueTracker = null)
+        public EndpointManager(IEndpointClient endpointClient, EndpointQuery path, double cooldown, IssueTracker issueTracker = null)
         {
-            if (apiClient == null)
-            {
-                throw new ArgumentNullException(nameof(apiClient));
-            }
-
             if (endpointClient == null)
             {
                 throw new ArgumentNullException(nameof(endpointClient));
@@ -100,7 +94,6 @@ namespace ApiParser.V2
                     $"are currently not supported.");
             }
 
-            _apiClient = apiClient;
             _client = endpointClient;
             _path = path;
             Cooldown = cooldown;

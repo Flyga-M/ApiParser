@@ -1,11 +1,11 @@
-﻿using ApiParser.V2.Settings;
+﻿using ApiParser.Settings;
 using Gw2Sharp.WebApi.Exceptions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 
-namespace ApiParser.V2
+namespace ApiParser
 {   
     /// <summary>
     /// Processes information on (un)successfull gw2 api requests.
@@ -24,7 +24,7 @@ namespace ApiParser.V2
         /// <summary>
         /// Fires when the <see cref="State"/> changes.
         /// </summary>
-        public EventHandler<ApiState> StateChanged;
+        public event EventHandler<ApiState> StateChanged;
 
         /// <summary>
         /// The <see cref="DateTime"/> when the <see cref="State"/> changed last.
