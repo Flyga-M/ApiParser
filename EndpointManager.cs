@@ -492,8 +492,12 @@ namespace ApiParser
                 }
                 catch (TooManyRequestsException ex)
                 {
-                    _issueTracker?.AddIssue(ex);
+                    if (_issueTracker?.Disposed == false)
+                    {
+                        _issueTracker?.AddIssue(ex);
+                    }
                     success = false;
+
                     if (i == amount - 1)
                     {
                         throw new EndpointRequestException($"Api request via {methodName} on endpoint {_client.EndpointPath} " +
@@ -502,7 +506,10 @@ namespace ApiParser
                 }
                 catch (ServerErrorException ex)
                 {
-                    _issueTracker?.AddIssue(ex);
+                    if (_issueTracker?.Disposed == false)
+                    {
+                        _issueTracker?.AddIssue(ex);
+                    }
                     success = false;
                     if (i == amount - 1)
                     {
@@ -512,7 +519,10 @@ namespace ApiParser
                 }
                 catch (ServiceUnavailableException ex)
                 {
-                    _issueTracker?.AddIssue(ex);
+                    if (_issueTracker?.Disposed == false)
+                    {
+                        _issueTracker?.AddIssue(ex);
+                    }
                     success = false;
                     if (i == amount - 1)
                     {
@@ -552,7 +562,10 @@ namespace ApiParser
                 await Task.Delay(delay);
             }
 
-            _issueTracker?.AddSuccess();
+            if (_issueTracker?.Disposed == false)
+            {
+                _issueTracker?.AddSuccess();
+            }
             return result;
         }
 

@@ -31,6 +31,11 @@ namespace ApiParser
         /// </summary>
         public DateTime LastStateChange { get; private set; }
 
+        /// <summary>
+        /// Determines whether the <see cref="IssueTracker"/> has been disposed.
+        /// </summary>
+        public bool Disposed => _disposed;
+
         private void OnStateChanged()
         {
             LastStateChange = DateTime.Now;
