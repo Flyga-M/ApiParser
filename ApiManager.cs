@@ -5,8 +5,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using ApiParser.Settings;
 using System;
-using Gw2Sharp.WebApi.V2.Clients;
-using System.Reflection;
 using Gw2Sharp.WebApi.V2.Models;
 using Gw2Sharp.WebApi;
 using static ApiParser.QueryUtil;
