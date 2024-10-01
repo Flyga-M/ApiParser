@@ -8,6 +8,7 @@ using System;
 using Gw2Sharp.WebApi.V2.Models;
 using Gw2Sharp.WebApi;
 using static ApiParser.QueryUtil;
+using System.Collections.Concurrent;
 
 namespace ApiParser
 {
@@ -23,7 +24,7 @@ namespace ApiParser
 
         private IssueTracker _issueTracker;
 
-        private readonly Dictionary<string, EndpointManager> _endpointsByPath = new Dictionary<string, EndpointManager>();
+        private readonly ConcurrentDictionary<string, EndpointManager> _endpointsByPath = new ConcurrentDictionary<string, EndpointManager>();
 
         /// <summary>
         /// Determines how the <see cref="ApiManager"/> manages the <see cref="EndpointManager"/>s.
@@ -223,7 +224,7 @@ namespace ApiParser
             }
 
             _endpointsByPath[endpointPath].ClearCache();
-            _endpointsByPath.Remove(endpointPath);
+            _endpointsByPath.TryRemove(endpointPath, out _);
         }
 
         /// <inheritdoc/>
